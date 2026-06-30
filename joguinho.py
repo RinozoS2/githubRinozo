@@ -79,7 +79,7 @@ class TelaJogo(arcade.View):
 
         #Atualiza o jogador constante
         self.sprite_jogador = arcade.SpriteList()
-        self.sprite_jogador.append(self.jogador)
+        self.sprite_jogador.append(self.jogador) #Trabalhar com sprite em lista
 
         #Adicionando as moedas e criando
         self.sprite_moeda = arcade.SpriteList()
