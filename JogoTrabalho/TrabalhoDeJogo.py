@@ -1,11 +1,13 @@
-import arcade
-import random
+import arcade #funcionamento do código
+import random #posições e movimentos aleatórios
 
+#Propriedades da janela
 LARGURA = 800
 ALTURA = 600
 TITULO = "Ataque do titã"
 
-#Fisíca das bordas
+#Fisíca das bordas, impede que sai da tela
+#Se rebater for True, ele retorna
 def confBordas(objeto, rebater=False):
     if objeto.right > LARGURA:
         objeto.right = LARGURA
@@ -32,6 +34,10 @@ def confBordas(objeto, rebater=False):
             objeto.change_y = 0
 
 
+#As classes são como fábricas de objetos,
+#Cada um tem sua perculariedade
+
+#Moeda comum, que dá 1 ponto, estática e coletável
 class Moeda(arcade.Sprite):
 
     def __init__(self):
@@ -51,6 +57,7 @@ class Moeda(arcade.Sprite):
 
         confBordas(self, rebater = False)  
 
+#Moeda especial, única e coletável, da 5 pontos e tem física para se mover
 class MoedaEspecial(arcade.Sprite):
     def __init__(self):
         super().__init__("coin_sp2.png", scale = 0.35)
@@ -62,7 +69,9 @@ class MoedaEspecial(arcade.Sprite):
         self.center_y += self.change_y
 
         confBordas(self, rebater = True)
-                     
+
+#Classe do jogador, personagem principal, se move em AWSD
+#Possuí animação de acordo com a direção, não sai da tela   
 class Player(arcade.Sprite):
 
     def __init__(self):
@@ -108,10 +117,12 @@ class Player(arcade.Sprite):
         confBordas(self, rebater =False)
 
     
-
+#Inimigo simples que anda de forma aleatória e repetidade,
+#retira 1 ponto do jogador ao colidir e aparece em outra posição
 class TitaIrracional(arcade.Sprite):
 
     def __init__(self):
+        #Define a velocidade e a direção aleatória que o titã seguirá
         super().__init__("enemy_1.png", scale = 1)
         self.change_x = random.choice([-1.5, -1.0, 1.0, 1.5])
         self.change_y = random.choice([-1.5, -1.0, 1.0, 1.5])
@@ -131,10 +142,13 @@ class TitaIrracional(arcade.Sprite):
             self.change_y *= -1
 
 
+#Inimigo que persegue o jogador, pode causar a eliminação do player
 class TitaPuro(arcade.Sprite):
 
     def __init__(self, jogador):
         super().__init__("enemy_2.png", scale = 0.8)
+
+        #Define quem ele vai perseguir desde o começo e sua velocidade
         self.jogador = jogador
         self.velocidade = 2.5
 
@@ -156,6 +170,7 @@ class TitaPuro(arcade.Sprite):
         confBordas(self, rebater = False)
 
 
+#Criação da tela de menu com suas propriedades e o jpg
 class TelaMenu(arcade.View):
     def __init__(self):
         super().__init__()
@@ -202,6 +217,7 @@ class TelaMenu(arcade.View):
             arcade.close_window()
 
 
+#Criação da tela de instrução e suas propriedades
 class TelaInstrucao(arcade.View):
 
     def __init__(self):
@@ -257,6 +273,7 @@ class TelaInstrucao(arcade.View):
             tela_inicial = TelaMenu()
             self.window.show_view(tela_inicial)
 
+#Criação da tela de Informações e suas prorpeidades
 class TelaSobre(arcade.View):
     def __init__(self):
         super().__init__()
@@ -301,6 +318,8 @@ class TelaSobre(arcade.View):
             self.window.show_view(tela_menu)
 
 
+#Tela de vitória,  recebe os parametros da pontuação e do tempo do jogador
+#Valores numérios que são descontados ou aumentados
 class TelaGanhou(arcade.View):
     def __init__(self, pontuacao, tempo):
         super().__init__()
@@ -335,6 +354,7 @@ class TelaGanhou(arcade.View):
             self.window.show_view(TelaMenu())
 
 
+#Tela de derrota, é disparada através do evento no titã puro, que persegue o jogador
 class TelaPerdeu(arcade.View):
     def __init__(self):
         super().__init__()
@@ -354,6 +374,7 @@ class TelaPerdeu(arcade.View):
             self.window.show_view(TelaMenu())
 
 
+#Janela Final com as váriaveis necessárias
 class JogoAtaqueDoTita(arcade.View):
     def __init__(self):
         super().__init__()
@@ -474,6 +495,7 @@ class JogoAtaqueDoTita(arcade.View):
             self.registro += 1
             print(self.pontuacao)
 
+        #O len conta quantos elementos tem na lista, se for 0, significa que o jogador coletou todas as moedas
         if len(self.sprite_moeda_especial) == 0 and len(self.sprite_moedas) == 0:
             tela_final = TelaGanhou(self.pontuacao, self.tempo)
             self.window.show_view(tela_final)
