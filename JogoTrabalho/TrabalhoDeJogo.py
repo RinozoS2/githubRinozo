@@ -240,18 +240,18 @@ class TelaInstrucao(arcade.View):
 
         arcade.draw_text("OBJETIVOS", 120, 440,
                          arcade.color.BLUE, 24, anchor_x="left")
-        arcade.draw_text("- Colete 25 moedas comuns", 120, 410,
+        arcade.draw_text("- Colete 25 Titãs (1 ponto)", 120, 410,
                          arcade.color.WHITE, 16, anchor_x="left")
-        arcade.draw_text("- Colete 1 moeda especial", 120, 385,
+        arcade.draw_text("- Colete 1 Filtro de gás (5 pontos)", 120, 385,
                          arcade.color.WHITE, 16, anchor_x="left")
-        arcade.draw_text("- Total de 26 moedas para vencer", 120, 360,
+        arcade.draw_text("- Total de 26 pontos para vencer", 120, 360,
                          arcade.color.WHITE, 16, anchor_x="left")
 
         arcade.draw_text("INIMIGOS", 120, 320,
                          arcade.color.BLUE, 24, anchor_x="left")
-        arcade.draw_text("Titã Irracional: aparece de repente e te persegue", 120, 290,
+        arcade.draw_text("Titã Irracional: Anda de forma aleatória para te atacar (-1 ponto)", 120, 290,
                          arcade.color.WHITE, 16, anchor_x="left")
-        arcade.draw_text("Titã Puro: te persegue para sempre, não fique perto dele!", 120, 265,
+        arcade.draw_text("Titã Puro: te persegue para sempre, não fique perto dele! (Eliminado)", 120, 265,
                          arcade.color.WHITE, 16, anchor_x="left")
 
         arcade.draw_text("CONTROLES", 450, 440,
@@ -301,7 +301,7 @@ class TelaSobre(arcade.View):
 
         arcade.draw_text("Objetivo:", 120, 340,
                          arcade.color.BLUE, 20, anchor_x="left")
-        arcade.draw_text("Colete todas as moedas sem ser pego pelos inimigos.", 120, 310,
+        arcade.draw_text("Colete todos os recursos sem ser pego pelos inimigos.", 120, 310,
                          arcade.color.WHITE, 16, anchor_x="left")
 
         arcade.draw_text("Teclas:", 120, 260,
