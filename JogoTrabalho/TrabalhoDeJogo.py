@@ -4,6 +4,7 @@ import random #posições e movimentos aleatórios
 #Propriedades da janela
 LARGURA = 800
 ALTURA = 600
+GRAVIDADE = 0.5
 TITULO = "Ataque do titã"
 
 #Fisíca das bordas, impede que sai da tela
@@ -81,22 +82,15 @@ class Player(arcade.Sprite):
         self.texture_parado = arcade.load_texture("p1_idle.png")
         self.textura_direita = arcade.load_texture("p1_right.png")
         self.textura_esquerda = arcade.load_texture("p1_left.png")
-        self.textura_cima = arcade.load_texture("p1_up.png")
-        self.textura_baixo = arcade.load_texture("p1_down.png")
 
     def update(self, delta_time):
         self.center_x += self.change_x
-        self.center_y += self.change_y
       
         if self.change_x > 0:
             self.texture = self.textura_direita
         elif self.change_x < 0:
             self.texture = self.textura_esquerda
 
-        if self.change_y > 0:
-            self.texture = self.textura_cima
-        elif self.change_y < 0:
-            self.texture = self.textura_baixo
 
         if self.right > LARGURA:
             self.change_x = 0
@@ -106,19 +100,18 @@ class Player(arcade.Sprite):
             self.change_x = 0
             self.left = 0
 
-        if self.top > ALTURA:
-            self.change_y = 0
-            self.top = ALTURA
-
-        if self.bottom < 0:
-            self.change_y = 0
-            self.bottom = 0    
-
         confBordas(self, rebater =False)
 
     
 #Inimigo simples que anda de forma aleatória e repetidade,
 #retira 1 ponto do jogador ao colidir e aparece em outra posição
+class Bloco(arcade.Sprite):
+    def __init__(self, x: float, y: float):
+        super().__init__("muro.jpg", scale = 1)
+
+        self.center_x = x
+        self.center_y = y
+
 class TitaIrracional(arcade.Sprite):
 
     def __init__(self):
@@ -306,7 +299,7 @@ class TelaSobre(arcade.View):
 
         arcade.draw_text("Teclas:", 120, 260,
                          arcade.color.BLUE, 20, anchor_x="left")
-        arcade.draw_text("W, A, S, D para mover", 120, 230,
+        arcade.draw_text("W ou SPACE, A, D para mover", 120, 230,
                          arcade.color.WHITE, 16, anchor_x="left")
 
         arcade.draw_text("ESC ou M para voltar ao menu", LARGURA / 2, 90,
@@ -373,7 +366,6 @@ class TelaPerdeu(arcade.View):
         if key == arcade.key.ESCAPE:
             self.window.show_view(TelaMenu())
 
-
 #Janela Final com as váriaveis necessárias
 class JogoAtaqueDoTita(arcade.View):
     def __init__(self):
@@ -397,6 +389,23 @@ class JogoAtaqueDoTita(arcade.View):
         self.jogador.center_y = 0
         self.sprite_jogador = arcade.SpriteList()
         self.sprite_jogador.append(self.jogador)
+
+        self.sprite_blocos = arcade.SpriteList()
+        for x in range(32, LARGURA + 32, 64): 
+            chao = Bloco(x = x, y = 30)
+            self.sprite_blocos.append(chao)
+
+        posicoes_plataforma = [(300,250), (500, 250)]
+        for x, y in posicoes_plataforma:
+            plataforma = Bloco(x,y)
+            self.sprite_blocos.append(plataforma)    
+
+        #Adicionando a mecânica de fisíca
+        self.engine_fisica = arcade.PhysicsEnginePlatformer(
+            player_sprite = self.jogador,
+            walls= self.sprite_blocos,
+            gravity_constant=GRAVIDADE
+        )
 
         self.sprite_moedas = arcade.SpriteList()
 
@@ -438,6 +447,7 @@ class JogoAtaqueDoTita(arcade.View):
         self.sprite_titas_irracionais.draw()
         self.sprite_moedas.draw()
         self.sprite_moeda_especial.draw()
+        self.sprite_blocos.draw()
         self.sprite_jogador.draw()
         self.sprite_titas_puros.draw()
         arcade.draw_text(f"Pontos Coletados: {self.pontuacao}", 10, 570,
@@ -454,6 +464,9 @@ class JogoAtaqueDoTita(arcade.View):
         
 
     def on_update(self, delta_time):
+        #Atualizar a fisíca
+        self.engine_fisica.update()
+
         self.sprite_jogador.update(delta_time)
         self.sprite_moedas.update(delta_time)
         self.sprite_titas_irracionais.update(delta_time)
@@ -500,22 +513,12 @@ class JogoAtaqueDoTita(arcade.View):
             tela_final = TelaGanhou(self.pontuacao, self.tempo)
             self.window.show_view(tela_final)
 
-        
-
-        
-
-                            
-        
 
     def on_key_press(self, key, modifiers):
         if key == arcade.key.D:
             self.jogador.change_x = self.velocidade
         elif key == arcade.key.A:
             self.jogador.change_x = -self.velocidade
-        elif key == arcade.key.W:
-            self.jogador.change_y = self.velocidade
-        elif key == arcade.key.S:
-            self.jogador.change_y = -self.velocidade
 
         elif key == arcade.key.ESCAPE:
             tela_menu = TelaMenu()
@@ -526,9 +529,9 @@ class JogoAtaqueDoTita(arcade.View):
         if key == arcade.key.A or key == arcade.key.D:
             self.jogador.change_x = 0
             self.jogador.texture = self.jogador.texture_parado
-        elif key == arcade.key.W or key == arcade.key.S:
-            self.jogador.change_y = 0
-            self.jogador.texture = self.jogador.texture_parado
+        if key == arcade.key.W or key == arcade.key.SPACE:
+            if self.engine_fisica.can_jump():
+                self.jogador.change_y = 16
         
     
 
