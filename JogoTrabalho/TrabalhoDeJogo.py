@@ -4,7 +4,8 @@ import random #posições e movimentos aleatórios
 #Propriedades da janela
 LARGURA = 800
 ALTURA = 600
-GRAVIDADE = 0.5
+GRAVIDADE = 0.45
+
 TITULO = "Ataque do titã"
 
 #Fisíca das bordas, impede que sai da tela
@@ -143,24 +144,29 @@ class TitaPuro(arcade.Sprite):
 
         #Define quem ele vai perseguir desde o começo e sua velocidade
         self.jogador = jogador
-        self.velocidade = 2.5
+        self.velocidade = 2.0
+        self.change_x = 0
+        self.change_y = 0
 
     def update(self, delta_time):
+        #Calcular a direção de perseguição em ambos os eixos
         dx = self.jogador.center_x - self.center_x
         dy = self.jogador.center_y - self.center_y
 
+        #Calcular distância
         distancia = (dx ** 2 + dy ** 2) ** 0.5
+        
         if distancia > 0:
+            #Normalizar a direção
             dx /= distancia
             dy /= distancia
-
-        self.change_x = dx * self.velocidade
-        self.change_y = dy * self.velocidade
-
-        self.center_x += self.change_x
-        self.center_y += self.change_y
-
-        confBordas(self, rebater = False)
+            
+            #Aplicar velocidade em ambas as direções
+            self.change_x = dx * self.velocidade
+            self.change_y = dy * self.velocidade
+        else:
+            self.change_x = 0
+            self.change_y = 0
 
 
 #Criação da tela de menu com suas propriedades e o jpg
@@ -380,9 +386,8 @@ class JogoAtaqueDoTita(arcade.View):
         self.tempo_mensagem = 0
         self.velocidade_ini = 2
         self.jogo_rodando = True
-        
-
-
+        self.is_invencivel = False
+        self.tempo_invencibilidade = 0
 
         self.jogador = Player()
         self.jogador.center_x = 400
@@ -398,21 +403,48 @@ class JogoAtaqueDoTita(arcade.View):
         posicoes_plataforma = [(300,250), (500, 250)]
         for x, y in posicoes_plataforma:
             plataforma = Bloco(x,y)
-            self.sprite_blocos.append(plataforma)    
+            self.sprite_blocos.append(plataforma)
 
-        #Adicionando a mecânica de fisíca
+        #Criar TitaPuro antes do engine de física
+        self.sprite_titas_puros = arcade.SpriteList()
+        self.tita_puro = TitaPuro(self.jogador)
+        self.tita_puro.center_x = 800
+        self.tita_puro.center_y = 600
+        self.sprite_titas_puros.append(self.tita_puro)
+
+        #Adicionando a mecânica de física para o jogador
         self.engine_fisica = arcade.PhysicsEnginePlatformer(
             player_sprite = self.jogador,
             walls= self.sprite_blocos,
             gravity_constant=GRAVIDADE
         )
 
+        #Adicionando a mecânica de física para o TitaPuro (movimento livre com colisão)
+        self.engine_fisica_tita_puro = arcade.PhysicsEngineSimple(
+            player_sprite = self.tita_puro,
+            walls = self.sprite_blocos
+        )
+
         self.sprite_moedas = arcade.SpriteList()
 
         for i in range(25):
             self.moeda = Moeda()
-            self.moeda.center_x = random.randint(50, LARGURA - 50)
-            self.moeda.center_y = random.randint(50, ALTURA - 50)
+            #Gerar posição válida: sem colisão com blocos e sem sobreposição com outras moedas
+            posicao_valida = False
+            while not posicao_valida:
+                self.moeda.center_x = random.randint(50, LARGURA - 50)
+                self.moeda.center_y = random.randint(50, ALTURA - 50)
+                
+                #Verificar se não colide com blocos
+                blocos_colididos = arcade.check_for_collision_with_list(self.moeda, self.sprite_blocos)
+                
+                #Verificar se não sobrepõe com outras moedas
+                moedas_colididas = arcade.check_for_collision_with_list(self.moeda, self.sprite_moedas)
+                
+                #Se não tem colisão, a posição é válida
+                if not blocos_colididos and not moedas_colididas:
+                    posicao_valida = True
+            
             self.sprite_moedas.append(self.moeda)
         print(len(self.sprite_moedas))
 
@@ -424,23 +456,27 @@ class JogoAtaqueDoTita(arcade.View):
         self.sprite_titas_irracionais = arcade.SpriteList()
         self.sprite_titas_irracionais.append(self.tita_irracional)
 
-        self.sprite_titas_puros = arcade.SpriteList()
-        self.tita_puro = TitaPuro(self.jogador)
-        self.tita_puro.center_x = 800
-        self.tita_puro.center_y = 600
-        self.sprite_titas_puros.append(self.tita_puro)
-
-
-        
-
         self.sprite_moeda_especial = arcade.SpriteList()
         self.moeda_especial = MoedaEspecial()
-        self.moeda_especial.center_x = random.randint(100, LARGURA - 100)
-        self.moeda_especial.center_y = random.randint(100, ALTURA - 100)
+        
+        #Gerar posição válida para moeda especial: sem colisão com blocos e moedas
+        posicao_valida = False
+        while not posicao_valida:
+            self.moeda_especial.center_x = random.randint(100, LARGURA - 100)
+            self.moeda_especial.center_y = random.randint(100, ALTURA - 100)
+            
+            #Verificar se não colide com blocos
+            blocos_colididos = arcade.check_for_collision_with_list(self.moeda_especial, self.sprite_blocos)
+            
+            #Verificar se não sobrepõe com moedas simples
+            moedas_colididas = arcade.check_for_collision_with_list(self.moeda_especial, self.sprite_moedas)
+            
+            #Se não tem colisão, a posição é válida
+            if not blocos_colididos and not moedas_colididas:
+                posicao_valida = True
+        
         self.moeda_especial.change_x = self.velocidade
         self.moeda_especial.change_y = self.velocidade
-        
-
         self.sprite_moeda_especial.append(self.moeda_especial)
     def on_draw(self):
         self.clear()
@@ -466,6 +502,7 @@ class JogoAtaqueDoTita(arcade.View):
     def on_update(self, delta_time):
         #Atualizar a fisíca
         self.engine_fisica.update()
+        self.engine_fisica_tita_puro.update()
 
         self.sprite_jogador.update(delta_time)
         self.sprite_moedas.update(delta_time)
@@ -519,7 +556,9 @@ class JogoAtaqueDoTita(arcade.View):
             self.jogador.change_x = self.velocidade
         elif key == arcade.key.A:
             self.jogador.change_x = -self.velocidade
-
+        elif key == arcade.key.W or key == arcade.key.SPACE:
+            if self.engine_fisica.can_jump():
+                self.jogador.change_y = 16
         elif key == arcade.key.ESCAPE:
             tela_menu = TelaMenu()
             self.window.show_view(tela_menu)
@@ -529,9 +568,6 @@ class JogoAtaqueDoTita(arcade.View):
         if key == arcade.key.A or key == arcade.key.D:
             self.jogador.change_x = 0
             self.jogador.texture = self.jogador.texture_parado
-        if key == arcade.key.W or key == arcade.key.SPACE:
-            if self.engine_fisica.can_jump():
-                self.jogador.change_y = 16
         
     
 
