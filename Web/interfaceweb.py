@@ -7,4 +7,4 @@ app = Flask(__name__, template_folder='template') #2-cria a instância de app do
 from views import *
 
 if __name__ == '__main__':
-    app.run()
+    app.run(debug = True)
