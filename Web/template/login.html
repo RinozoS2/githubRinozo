@@ -22,7 +22,7 @@
             </div>
 
             <div class="input-box">
-                <input placeholder="Senha" type="password">
+                <input placeholder="Senha" type="password" required>
             </div>
 
             <div class="register_link">
@@ -32,7 +32,7 @@
             <div class="register_link">
                 <p>
                     Não possui uma conta?
-                    <a href="#">Cadastre-se</a>
+                    <a href="{{ url_for('cadastro') }}">Cadastre-se</a>
                 </p>
             </div>
 
@@ -50,6 +50,13 @@
         </form>
 
     </main>
+
+    <section class = "info">
+        <h2> Bem- vindo ao Sistema de Produtividade e Aprendizado Monitorado</h2>
+            <p>
+                Conecte-se com o SPAM IFPR e aproveite todos os recursos disponíveis para aprimorar sua experiência de aprendizado.
+            </p>
+    </section>
 
 </body>
 </html>

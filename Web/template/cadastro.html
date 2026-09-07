@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>CADASTRO</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles2.css') }}">
+</head>
+<body>
+    
+    <main class="container">
+
+        <form>
+
+            <h1>Cadastro SPAM IFPR</h1>
+
+            <div class="input-box">
+                <input placeholder="CPF" type="text" maxlength="11">
+            </div>
+
+            <div class="input-box">
+                <input placeholder="email" type="email">
+            </div>
+
+            <div class="input-box">
+                <input placeholder="senha" type="password" required>
+            </div>
+
+            <div class="input-box">
+                <input placeholder="Confirmar Senha" type="password" required>
+            </div>
+
+            <div class="button-box">
+                <button class="cadastrar" type="submit">Cadastrar</button>
+            </div>
+
+        </form>
+
+    </main>
+
+</body>
+</html>

@@ -11,10 +11,16 @@ body{
     display: flex;
     justify-content: center;
     align-items: center;
+    flex-direction: row-reverse;
+    gap: 100px;
     min-height: 100vh;
-    background: #3c9115;
-    background-size: cover;
-    background-position: center;
+    background: linear-gradient(
+        to right,
+        #fff 0%,
+        #fff 50%,
+        #3c9115 50%,
+        #3c9115 100%
+    );
 }
 
 .container{
@@ -112,3 +118,19 @@ body{
 .register_link a:hover{
     text-decoration: underline;
 }
+
+.info {
+    max-width: 420px;
+    color: #080303;
+    text-align: center;
+}
+
+.info h2 {
+    font-size: 30px;
+    margin-bottom: 25px;
+}
+
+.info p{
+    font-size: 16px;
+}
+
