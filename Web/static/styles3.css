@@ -1,0 +1,404 @@
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700;800&display=swap');
+
+
+/* =========================
+   CONFIGURAÇÕES GERAIS
+========================= */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+
+    font-family: "Open Sans", sans-serif;
+}
+
+
+body {
+
+    min-height: 100vh;
+    padding: 32px 20px 32px 32px;
+    background: linear-gradient(90deg, #3c9115 0 10px, #f3f6f1 10px 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #202820;
+}
+
+
+/* =========================
+   CONTAINER PRINCIPAL
+========================= */
+
+.materiais-container {
+
+    width: 100%;
+
+    max-width: 1000px;
+
+    min-height: 650px;
+
+    padding: 25px 30px;
+
+    position: relative;
+}
+
+
+/* =========================
+   CABEÇALHO
+========================= */
+
+.cabecalho {
+
+    text-align: center;
+    margin-bottom: 28px;
+}
+
+
+.cabecalho h1 {
+
+    margin-bottom: 10px;
+    color: #2f7510;
+    font-size: 30px;
+    font-weight: 800;
+}
+
+
+.cabecalho p {
+
+    display: inline-block;
+    padding: 7px 14px;
+    border: 1px solid #d6e5cd;
+    border-radius: 6px;
+    background: #e8f1e3;
+    color: #2f7510;
+    font-size: 11px;
+    line-height: 1.5;
+    font-weight: 700;
+    text-align: center;
+}
+
+
+/* =========================
+   CABEÇALHO DA TABELA
+========================= */
+
+.cabecalho-tabela {
+
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 0.8fr;
+    gap: 12px;
+    align-items: center;
+    margin: 0 0 10px;
+    padding: 0 16px 0 58px;
+    color: #5f695c;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+
+.cabecalho-tabela div:first-child {
+
+    text-align: left;
+}
+
+
+/* =========================
+   MATERIAL
+========================= */
+
+.material {
+
+    min-height: 68px;
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 0.8fr;
+    gap: 12px;
+    align-items: center;
+    position: relative;
+    margin-bottom: 10px;
+    padding: 14px 16px 14px 58px;
+    border: 1px solid #e1e8dd;
+    border-left: 4px solid #8fbe78;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 2px 7px rgba(34, 60, 26, 0.04);
+    transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+
+/* Efeito ao passar o mouse */
+
+.material:hover {
+    transform: translateY(-2px);
+    border-color: #c8ddbd;
+    box-shadow: 0 7px 16px rgba(34, 60, 26, 0.09);
+}
+
+
+/* =========================
+   TEXTO DOS MATERIAIS
+========================= */
+
+.conteudo,
+ .materia,
+ .professor {
+     font-size: 14px;
+     font-weight: 700;
+     line-height: 1.45;
+     text-align: center;
+     overflow-wrap: anywhere;
+}
+
+
+.conteudo {
+    color: #202820;
+    text-align: left;
+}
+
+.materia {
+    color: #2f7510;
+}
+
+.professor {
+    color: #5f695c;
+}
+
+
+/* =========================
+   BOTÃO +
+========================= */
+
+.botao-mais {
+
+    position: absolute;
+
+    left: -20px;
+
+    top: 50%;
+
+    transform: translateY(-50%);
+
+    width: 24px;
+
+    height: 24px;
+
+    border-radius: 50%;
+
+    border: 2px solid #111;
+
+    background: transparent;
+
+    color: #111;
+
+    font-size: 21px;
+
+    font-weight: 600;
+
+    line-height: 17px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    cursor: pointer;
+
+    transition: 0.2s;
+}
+
+
+.botao-mais:hover {
+
+    background: #111;
+
+    color: white;
+
+    transform: translateY(-50%) scale(1.1);
+}
+
+
+/* =========================
+   BOTÃO ESCOLHER MATERIAL
+========================= */
+
+.area-botao {
+
+    display: flex;
+
+    justify-content: flex-end;
+
+    margin-top: 15px;
+
+    padding-right: 0;
+}
+
+
+.escolher {
+
+    border: none;
+
+    border-radius: 20px;
+
+    padding: 5px 20px;
+
+    background: #dce4e0;
+
+    color: #111;
+
+    font-size: 12px;
+
+    font-weight: 700;
+
+    cursor: pointer;
+
+    transition: 0.2s;
+}
+
+
+.escolher:hover {
+
+    background: #c8d2cd;
+
+    transform: translateY(-1px);
+}
+
+
+/* =========================
+.botao-mais {
+    left: 14px;
+    width: 30px;
+    height: 30px;
+    border: 1px solid #cbdcc2;
+    background: #e8f1e3;
+    color: #2f7510;
+}
+
+.botao-mais:hover {
+    background: #3c9115;
+    color: #fff;
+}
+
+.botao-mais:focus-visible,
+.escolher:focus-visible,
+.paginacao button:focus-visible {
+    outline: 3px solid rgba(60, 145, 21, 0.35);
+    outline-offset: 3px;
+}
+
+.area-botao {
+    margin-top: 18px;
+}
+
+.escolher {
+    min-height: 42px;
+    padding: 9px 18px;
+    border: 1px solid #3c9115;
+    border-radius: 6px;
+    background: #3c9115;
+    color: #fff;
+    font-size: 13px;
+    transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.escolher:hover {
+    transform: translateY(-1px);
+    border-color: #2f7510;
+    background: #2f7510;
+}
+
+.paginacao {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 7px;
+    margin: 24px auto 0;
+}
+
+.paginacao button {
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #d9e4d3;
+    border-radius: 6px;
+    background: #fff;
+    color: #394335;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.paginacao button:hover {
+    border-color: #8fbe78;
+    background: #e8f1e3;
+}
+
+.paginacao .pagina-atual,
+.paginacao .pagina-atual:hover {
+    border-color: #3c9115;
+    background: #3c9115;
+    color: #fff;
+}
+
+.paginacao .pagina-controle {
+    color: #2f7510;
+    font-size: 22px;
+    line-height: 1;
+}
+
+/* =========================
+   RESPONSIVIDADE
+========================= */
+
+@media (max-width: 700px) {
+
+    body {
+
+        background: linear-gradient(90deg, #3c9115 0 10px, #f3f6f1 10px 100%);
+
+    }
+
+
+    .materiais-container {
+
+        padding: 20px 4px;
+
+    }
+
+
+    .cabecalho-tabela,
+    .material {
+
+        grid-template-columns: 1.3fr 1fr 0.8fr;
+
+    }
+
+
+    .cabecalho-tabela {
+
+        font-size: 10px;
+
+    }
+
+
+    .conteudo,
+    .materia,
+    .professor {
+
+        font-size: 12px;
+
+    }
+
+
+    .botao-mais {
+
+        left: 9px;
+
+    }
+
+}

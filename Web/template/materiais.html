@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Materiais - SPAM IFPR</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles3.css') }}">
+</head>
+
+<body>
+
+    <main class="materiais-container">
+
+        <!-- CABEÇALHO -->
+        <header class="cabecalho">
+
+            <h1>SPAM IFPR</h1>
+
+            <p>
+                VISUALIZAR E ESCOLHER<br>
+                UM MATERIAL DE ESTUDO
+            </p>
+
+        </header>
+
+
+        <!-- TÍTULOS DAS COLUNAS -->
+        <section class="cabecalho-tabela">
+
+            <div>Conteúdo</div>
+
+            <div>Matéria</div>
+
+            <div>Professor</div>
+
+        </section>
+
+
+        <!-- PRIMEIRO MATERIAL -->
+        <section class="material">
+
+            <button class="botao-mais">+</button>
+
+            <div class="conteudo">
+                MATRIZES
+            </div>
+
+            <div class="materia">
+                MATEMÁTICA
+            </div>
+
+            <div class="professor">
+                ENZO
+            </div>
+
+        </section>
+
+
+        <!-- SEGUNDO MATERIAL -->
+        <section class="material">
+
+            <button class="botao-mais">+</button>
+
+            <div class="conteudo">
+                URBANIZAÇÃO
+            </div>
+
+            <div class="materia">
+                GEOGRAFIA
+            </div>
+
+            <div class="professor">
+                JULIA
+            </div>
+
+        </section>
+
+
+        <!-- TERCEIRO MATERIAL -->
+        <section class="material">
+
+            <button class="botao-mais">+</button>
+
+            <div class="conteudo">
+                INDEPENDÊNCIA DO<br>
+                BRASIL
+            </div>
+
+            <div class="materia">
+                HISTÓRIA
+            </div>
+
+            <div class="professor">
+                KAUAN
+            </div>
+
+        </section>
+
+
+        <!-- BOTÃO -->
+                <nav class="paginacao" aria-label="Paginação de materiais">
+                    <button class="pagina-controle" type="button" aria-label="Página anterior">&lsaquo;</button>
+                    <button class="pagina pagina-atual" type="button" aria-current="page">1</button>
+                    <button class="pagina" type="button">2</button>
+                    <button class="pagina" type="button">3</button>
+                    <button class="pagina-controle" type="button" aria-label="Próxima página">&rsaquo;</button>
+                </nav>
+
+                <!-- BOTÃO -->
+        <div class="area-botao">
+
+            <button class="escolher">
+                Escolher material
+            </button>
+
+        </div>
+
+    </main>
+
+</body>
+
+</html>

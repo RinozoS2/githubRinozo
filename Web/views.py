@@ -12,3 +12,7 @@ def login():
 @app.route('/cadastro')
 def cadastro():
     return render_template('cadastro.html')
+
+@app.route('/materiais')
+def materiais():
+    return render_template('materiais.html')
