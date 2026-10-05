@@ -1,5 +1,7 @@
 import arcade #funcionamento do código
 import random #posições e movimentos aleatórios
+from PIL import Image
+from ranking import inicializar_banco, obter_ranking, registrar_resultado
 
 #Propriedades da janela
 LARGURA = 800
@@ -81,17 +83,42 @@ class Player(arcade.Sprite):
         self.change_x = 0
         self.change_y = 0
         self.texture_parado = arcade.load_texture("p1_idle.png")
-        self.textura_direita = arcade.load_texture("p1_right.png")
-        self.textura_esquerda = arcade.load_texture("p1_left.png")
+        self.textura_pulo = arcade.load_texture("p1_up.png")
+        self.textura_pulo_esquerda = self.textura_pulo.flip_left_right()
+        self.esta_pulando = False
+        self.tempo_animacao = 0
+        self.indice_animacao = 0
+        self.duracao_quadro = 0.1
+
+        imagem_parada = self.texture_parado.image
+        esquerda, topo, direita, base = imagem_parada.getchannel("A").getbbox()
+        tamanho_personagem = (direita - esquerda, base - topo)
+        self.texturas_andando = []
+        self.texturas_andando_esquerda = []
+
+        quadros = arcade.load_spritesheet("p1_animation.png").get_texture_grid(
+            (271, 724), columns=8, count=8
+        )
+        for indice, quadro in enumerate(quadros):
+            imagem_quadro = quadro.image
+            limites = imagem_quadro.getchannel("A").getbbox()
+            recorte = imagem_quadro.crop(limites).resize(
+                tamanho_personagem, Image.Resampling.LANCZOS
+            )
+            imagem_normalizada = Image.new("RGBA", imagem_parada.size)
+            imagem_normalizada.alpha_composite(recorte, (esquerda, topo))
+            self.texturas_andando.append(
+                arcade.Texture(imagem_normalizada, hash=f"p1-walk-right-{indice}")
+            )
+            self.texturas_andando_esquerda.append(
+                arcade.Texture(
+                    imagem_normalizada.transpose(Image.Transpose.FLIP_LEFT_RIGHT),
+                    hash=f"p1-walk-left-{indice}",
+                )
+            )
 
     def update(self, delta_time):
         self.center_x += self.change_x
-      
-        if self.change_x > 0:
-            self.texture = self.textura_direita
-        elif self.change_x < 0:
-            self.texture = self.textura_esquerda
-
 
         if self.right > LARGURA:
             self.change_x = 0
@@ -102,6 +129,29 @@ class Player(arcade.Sprite):
             self.left = 0
 
         confBordas(self, rebater =False)
+
+        if self.esta_pulando:
+            self.texture = (
+                self.textura_pulo_esquerda if self.change_x < 0
+                else self.textura_pulo
+            )
+        elif self.change_x != 0:
+            self.tempo_animacao += delta_time
+            while self.tempo_animacao >= self.duracao_quadro:
+                self.tempo_animacao -= self.duracao_quadro
+                self.indice_animacao = (self.indice_animacao + 1) % len(
+                    self.texturas_andando
+                )
+            quadros = (
+                self.texturas_andando_esquerda
+                if self.change_x < 0
+                else self.texturas_andando
+            )
+            self.texture = quadros[self.indice_animacao]
+        else:
+            self.tempo_animacao = 0
+            self.indice_animacao = 0
+            self.texture = self.texture_parado
 
     
 #Inimigo simples que anda de forma aleatória e repetidade,
@@ -196,10 +246,11 @@ class TelaMenu(arcade.View):
         arcade.draw_text("J - JOGAR", 220, 320, arcade.color.WHITE, 20, anchor_x="left")
         arcade.draw_text("S - SOBRE O JOGO", 220, 280, arcade.color.WHITE, 20, anchor_x="left")
         arcade.draw_text("I - INSTRUÇÃO", 220, 240, arcade.color.WHITE, 20, anchor_x="left")
+        arcade.draw_text("R - RANKING", 220, 200, arcade.color.WHITE, 20, anchor_x="left")
 
-        arcade.draw_text("Pressione a tecla correspondente", LARGURA / 2, 160,
+        arcade.draw_text("Pressione a tecla correspondente", LARGURA / 2, 150,
                          arcade.color.WHITE, 16, anchor_x="center")
-        arcade.draw_text("ESC - SAIR", LARGURA / 2, 130,
+        arcade.draw_text("ESC - SAIR", LARGURA / 2, 120,
                          arcade.color.WHITE, 16, anchor_x="center")
 
     def on_key_press(self,key,modifiers):
@@ -212,8 +263,52 @@ class TelaMenu(arcade.View):
         elif key == arcade.key.J:
             tela_jogo = JogoAtaqueDoTita()
             self.window.show_view(tela_jogo)
+        elif key == arcade.key.R:
+            self.window.show_view(TelaRanking())
         elif key == arcade.key.ESCAPE:
             arcade.close_window()
+
+
+class TelaRanking(arcade.View):
+    def __init__(self):
+        super().__init__()
+        arcade.set_background_color(arcade.color.BLACK)
+        self.resultados = obter_ranking()
+        self.inicio = 0
+
+    def on_draw(self):
+        self.clear()
+        arcade.draw_text("RANKING", LARGURA / 2, 530, arcade.color.WHITE,
+                         40, anchor_x="center")
+        arcade.draw_text("POS.       PONTOS                 TEMPO", 180, 475,
+                         arcade.color.YELLOW, 20, anchor_x="left")
+
+        if not self.resultados:
+            arcade.draw_text("Nenhuma partida registrada.", LARGURA / 2, 400,
+                             arcade.color.WHITE, 20, anchor_x="center")
+        else:
+            for posicao, resultado in enumerate(
+                self.resultados[self.inicio:self.inicio + 10],
+                start=self.inicio + 1
+            ):
+                y = 435 - (posicao - self.inicio - 1) * 35
+                arcade.draw_text(
+                    f"{posicao:>3}.             {resultado.pontuacao:>3} pontos"
+                    f"                 {resultado.tempo:.1f}s",
+                    180, y, arcade.color.WHITE, 18, anchor_x="left"
+                )
+
+        arcade.draw_text("↑ / ↓ navegar     ESC ou M voltar ao menu",
+                         LARGURA / 2, 70, arcade.color.WHITE, 16,
+                         anchor_x="center")
+
+    def on_key_press(self, key, modifiers):
+        if key == arcade.key.DOWN:
+            self.inicio = min(self.inicio + 1, max(0, len(self.resultados) - 10))
+        elif key == arcade.key.UP:
+            self.inicio = max(0, self.inicio - 1)
+        elif key == arcade.key.ESCAPE or key == arcade.key.M:
+            self.window.show_view(TelaMenu())
 
 
 #Criação da tela de instrução e suas propriedades
@@ -355,8 +450,10 @@ class TelaGanhou(arcade.View):
 
 #Tela de derrota, é disparada através do evento no titã puro, que persegue o jogador
 class TelaPerdeu(arcade.View):
-    def __init__(self):
+    def __init__(self, pontuacao, tempo):
         super().__init__()
+        self.pontuacao = pontuacao
+        self.tempo = tempo
         arcade.set_background_color(arcade.color.DARK_RED)
 
     def on_draw(self):
@@ -365,6 +462,9 @@ class TelaPerdeu(arcade.View):
                          arcade.color.WHITE, 50, anchor_x="center")
         arcade.draw_text("O Titã Puro te alcançou.", LARGURA / 2, ALTURA / 2,
                          arcade.color.WHITE, 24, anchor_x="center")
+        arcade.draw_text(f"Pontuação: {self.pontuacao}   Tempo: {self.tempo:.1f}s",
+                 LARGURA / 2, ALTURA / 2 - 35,
+                 arcade.color.WHITE, 20, anchor_x="center")
         arcade.draw_text("Pressione ESC para voltar ao menu", LARGURA / 2, ALTURA / 2 - 60,
                          arcade.color.WHITE, 18, anchor_x="center")
 
@@ -382,6 +482,7 @@ class JogoAtaqueDoTita(arcade.View):
         self.registro = 0
         self.velocidade = 5
         self.tempo = 0
+        self.resultado_registrado = False
         self.mensagem = ""
         self.tempo_mensagem = 0
         self.velocidade_ini = 2
@@ -478,6 +579,12 @@ class JogoAtaqueDoTita(arcade.View):
         self.moeda_especial.change_x = self.velocidade
         self.moeda_especial.change_y = self.velocidade
         self.sprite_moeda_especial.append(self.moeda_especial)
+
+    def salvar_resultado(self):
+        if not self.resultado_registrado:
+            registrar_resultado(self.pontuacao, self.tempo)
+            self.resultado_registrado = True
+
     def on_draw(self):
         self.clear()
         self.sprite_titas_irracionais.draw()
@@ -504,6 +611,13 @@ class JogoAtaqueDoTita(arcade.View):
         self.engine_fisica.update()
         self.engine_fisica_tita_puro.update()
 
+        pode_pular = self.engine_fisica.can_jump()
+        if self.jogador.esta_pulando:
+            if pode_pular and self.jogador.change_y <= 0:
+                self.jogador.esta_pulando = False
+        elif not pode_pular:
+            self.jogador.esta_pulando = True
+
         self.sprite_jogador.update(delta_time)
         self.sprite_moedas.update(delta_time)
         self.sprite_titas_irracionais.update(delta_time)
@@ -519,7 +633,8 @@ class JogoAtaqueDoTita(arcade.View):
         titas_irracionais = arcade.check_for_collision_with_list(self.jogador, self.sprite_titas_irracionais)
 
         if titas_puros:
-            self.window.show_view(TelaPerdeu())
+            self.salvar_resultado()
+            self.window.show_view(TelaPerdeu(self.pontuacao, self.tempo))
             return
 
         for tita in titas_irracionais:
@@ -547,6 +662,7 @@ class JogoAtaqueDoTita(arcade.View):
 
         #O len conta quantos elementos tem na lista, se for 0, significa que o jogador coletou todas as moedas
         if len(self.sprite_moeda_especial) == 0 and len(self.sprite_moedas) == 0:
+            self.salvar_resultado()
             tela_final = TelaGanhou(self.pontuacao, self.tempo)
             self.window.show_view(tela_final)
 
@@ -559,6 +675,7 @@ class JogoAtaqueDoTita(arcade.View):
         elif key == arcade.key.W or key == arcade.key.SPACE:
             if self.engine_fisica.can_jump():
                 self.jogador.change_y = 16
+                self.jogador.esta_pulando = True
         elif key == arcade.key.ESCAPE:
             tela_menu = TelaMenu()
             self.window.show_view(tela_menu)
@@ -573,6 +690,7 @@ class JogoAtaqueDoTita(arcade.View):
 
 
 def main():
+    inicializar_banco()
     janela = arcade.Window(LARGURA, ALTURA, TITULO)
     tela_inicial = TelaMenu()
     janela.show_view(tela_inicial)
