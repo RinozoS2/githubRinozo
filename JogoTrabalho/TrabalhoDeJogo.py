@@ -86,11 +86,17 @@ class Player(arcade.Sprite):
         self.textura_pulo = arcade.load_texture("p1_up.png")
         self.textura_pulo_esquerda = self.textura_pulo.flip_left_right()
         self.esta_pulando = False
+        self.tempo_dano = 0
         self.tempo_animacao = 0
         self.indice_animacao = 0
         self.duracao_quadro = 0.1
 
         imagem_parada = self.texture_parado.image
+        imagem_dano = arcade.load_texture("damage.png").image
+        self.textura_dano = arcade.Texture(
+            imagem_dano.resize(imagem_parada.size, Image.Resampling.LANCZOS),
+            hash="p1-damage",
+        )
         esquerda, topo, direita, base = imagem_parada.getchannel("A").getbbox()
         tamanho_personagem = (direita - esquerda, base - topo)
         self.texturas_andando = []
@@ -117,6 +123,9 @@ class Player(arcade.Sprite):
                 )
             )
 
+    def receber_dano(self):
+        self.tempo_dano = 1.5
+
     def update(self, delta_time):
         self.center_x += self.change_x
 
@@ -129,6 +138,12 @@ class Player(arcade.Sprite):
             self.left = 0
 
         confBordas(self, rebater =False)
+
+        if self.tempo_dano > 0:
+            self.tempo_dano = max(0, self.tempo_dano - delta_time)
+            if self.tempo_dano > 0:
+                self.texture = self.textura_dano
+                return
 
         if self.esta_pulando:
             self.texture = (
@@ -638,6 +653,7 @@ class JogoAtaqueDoTita(arcade.View):
             return
 
         for tita in titas_irracionais:
+            self.jogador.receber_dano()
             self.pontuacao -= 1
             print("Colidiu com o Titã Irracional!")
             self.mensagem = "TOCOU NO TITÃ IRRACIONAL! PERDEU 1 PONTO"
@@ -684,7 +700,6 @@ class JogoAtaqueDoTita(arcade.View):
     def on_key_release(self, key, modifiers):
         if key == arcade.key.A or key == arcade.key.D:
             self.jogador.change_x = 0
-            self.jogador.texture = self.jogador.texture_parado
         
     
 
