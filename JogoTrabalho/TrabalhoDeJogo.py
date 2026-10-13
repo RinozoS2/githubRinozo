@@ -504,6 +504,10 @@ class JogoAtaqueDoTita(arcade.View):
         self.jogo_rodando = True
         self.is_invencivel = False
         self.tempo_invencibilidade = 0
+        self.camera = arcade.Camera2D()
+        self.camera.position = (LARGURA / 2, ALTURA / 2)
+        self.duracao_impacto = 0.35
+        self.tempo_impacto = 0
 
         self.jogador = Player()
         self.jogador.center_x = 400
@@ -602,6 +606,13 @@ class JogoAtaqueDoTita(arcade.View):
 
     def on_draw(self):
         self.clear()
+        tremor_x = random.uniform(-8, 8) if self.tempo_impacto > 0 else 0
+        tremor_y = random.uniform(-8, 8) if self.tempo_impacto > 0 else 0
+        self.camera.position = (
+            LARGURA / 2 + tremor_x,
+            ALTURA / 2 + tremor_y,
+        )
+        self.camera.use()
         self.sprite_titas_irracionais.draw()
         self.sprite_moedas.draw()
         self.sprite_moeda_especial.draw()
@@ -616,6 +627,14 @@ class JogoAtaqueDoTita(arcade.View):
                          10, 520, arcade.color.WHITE, 16)
         if self.tempo_mensagem > 0:
             arcade.draw_text(self.mensagem, 220, 515, arcade.color.WHITE, 20)
+
+        self.camera.position = (LARGURA / 2, ALTURA / 2)
+        self.camera.use()
+        if self.tempo_impacto > 0:
+            intensidade = int(150 * self.tempo_impacto / self.duracao_impacto)
+            arcade.draw_lrbt_rectangle_filled(
+                0, LARGURA, 0, ALTURA, (255, 0, 0, intensidade)
+            )
 
 
 
@@ -639,6 +658,7 @@ class JogoAtaqueDoTita(arcade.View):
         self.sprite_titas_puros.update(delta_time)
         self.sprite_moeda_especial.update(delta_time)
         self.tempo += delta_time
+        self.tempo_impacto = max(0, self.tempo_impacto - delta_time)
         if self.tempo_mensagem > 0:
             self.tempo_mensagem -= delta_time
 
@@ -654,6 +674,7 @@ class JogoAtaqueDoTita(arcade.View):
 
         for tita in titas_irracionais:
             self.jogador.receber_dano()
+            self.tempo_impacto = self.duracao_impacto
             self.pontuacao -= 1
             print("Colidiu com o Titã Irracional!")
             self.mensagem = "TOCOU NO TITÃ IRRACIONAL! PERDEU 1 PONTO"
