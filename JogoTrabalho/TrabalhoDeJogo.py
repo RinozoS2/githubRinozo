@@ -5,7 +5,7 @@ import random #posições e movimentos aleatórios
 # Pillow permite recortar, redimensionar e espelhar imagens para as animações.
 from PIL import Image
 # Funções da camada de persistência: inicialização e leitura/gravação do ranking.
-from ranking import inicializar_banco, obter_ranking, registrar_resultado
+from ranking import Pontuacao, inicializar_banco, registrar_resultado
 
 #Propriedades da janela
 # Configuração global da área de jogo; coordenadas e limites usam esses valores.
@@ -103,8 +103,10 @@ class Player(arcade.Sprite):
         self.change_x = 0
         self.change_y = 0
         self.texture_parado = arcade.load_texture("p1_idle.png")
+        self.texture_parado_esquerda = self.texture_parado.flip_left_right()
         self.textura_pulo = arcade.load_texture("p1_up.png")
         self.textura_pulo_esquerda = self.textura_pulo.flip_left_right()
+        self.virado_para = "direita"
         self.esta_pulando = False
         self.tempo_dano = 0
         self.tempo_animacao = 0
@@ -175,10 +177,13 @@ class Player(arcade.Sprite):
                 self.texture = self.textura_dano
                 return
 
+        if self.change_x != 0:
+            self.virado_para = "esquerda" if self.change_x < 0 else "direita"
+
         # No ar, usa a pose de salto orientada para o lado do deslocamento.
-        if self.esta_pulando:
+        if self.change_y != 0:
             self.texture = (
-                self.textura_pulo_esquerda if self.change_x < 0
+                self.textura_pulo_esquerda if self.virado_para == "esquerda"
                 else self.textura_pulo
             )
         elif self.change_x != 0:
@@ -200,7 +205,11 @@ class Player(arcade.Sprite):
             # Parado: reinicia o ciclo para que a próxima caminhada comece no quadro 0.
             self.tempo_animacao = 0
             self.indice_animacao = 0
-            self.texture = self.texture_parado
+            self.texture = (
+                self.texture_parado_esquerda
+                if self.virado_para == "esquerda"
+                else self.texture_parado
+            )
 
     
 #Inimigo simples que anda de forma aleatória e repetidade,
@@ -345,8 +354,9 @@ class TelaRanking(arcade.View):
         super().__init__()
         arcade.set_background_color(arcade.color.BLACK)
         # Carrega os resultados persistidos uma vez e inicia a lista no começo.
-        self.resultados = obter_ranking()
-        self.inicio = 0
+        self.melhores = list(
+            Pontuacao.select().order_by(Pontuacao.pontos.desc()).limit(10)
+        )
 
     def on_draw(self):
         # Mostra até dez posições por página, formatando pontuação e duração.
@@ -360,29 +370,22 @@ class TelaRanking(arcade.View):
             arcade.draw_text("Nenhuma partida registrada.", LARGURA / 2, 400,
                              arcade.color.WHITE, 20, anchor_x="center")
         else:
-            for posicao, resultado in enumerate(
-                self.resultados[self.inicio:self.inicio + 10],
-                start=self.inicio + 1
-            ):
-                # O recorte mostra no máximo dez posições e preserva a numeração real.
-                y = 435 - (posicao - self.inicio - 1) * 35
+            for posicao, resultado in enumerate(self.melhores, start=1):
+                y = 435 - (posicao - 1) * 35
                 arcade.draw_text(
-                    f"{posicao:>3}.             {resultado.pontuacao:>3} pontos"
-                    f"                 {resultado.tempo:.1f}s",
+                    f"{posicao:>3}. {resultado.nome_jogador:<20} "
+                    f"{resultado.pontos:>3} pontos   "
+                    f"{resultado.tempo_partida:.1f}s",
                     180, y, arcade.color.WHITE, 18, anchor_x="left"
                 )
 
-        arcade.draw_text("↑ / ↓ navegar     ESC ou M voltar ao menu",
+        arcade.draw_text("ESC ou M voltar ao menu",
                          LARGURA / 2, 70, arcade.color.WHITE, 16,
                          anchor_x="center")
 
     def on_key_press(self, key, modifiers):
         # O índice limita a rolagem à primeira posição válida de uma página.
-        if key == arcade.key.DOWN:
-            self.inicio = min(self.inicio + 1, max(0, len(self.resultados) - 10))
-        elif key == arcade.key.UP:
-            self.inicio = max(0, self.inicio - 1)
-        elif key == arcade.key.ESCAPE or key == arcade.key.M:
+        if key == arcade.key.ESCAPE or key == arcade.key.M:
             self.window.show_view(TelaMenu())
 
 
@@ -499,12 +502,48 @@ class TelaSobre(arcade.View):
 #Tela de vitória,  recebe os parametros da pontuação e do tempo do jogador
 #Valores numérios que são descontados ou aumentados
 # Tela final de sucesso; recebe uma cópia dos valores da partida encerrada.
-class TelaGanhou(arcade.View):
+class TelaFim(arcade.View):
     def __init__(self, pontuacao, tempo):
         super().__init__()
-        # Guarda o resultado para que a tela final não dependa do estado do jogo.
         self.pontuacao = pontuacao
         self.tempo = tempo
+        self.nome_jogador = ""
+        self.resultado_salvo = False
+
+    def on_text(self, text):
+        if self.resultado_salvo:
+            return
+        self.nome_jogador = (self.nome_jogador + text)[:30]
+
+    def salvar_resultado(self):
+        nome = self.nome_jogador.strip()
+        if nome and not self.resultado_salvo:
+            registrar_resultado(nome, self.pontuacao, self.tempo)
+            self.resultado_salvo = True
+
+    def desenhar_campo_nome(self):
+        if self.resultado_salvo:
+            texto = "Resultado salvo. R - ranking"
+        else:
+            texto = f"Nome: {self.nome_jogador or '_'}  |  ENTER - salvar"
+        arcade.draw_text(texto, LARGURA / 2, 115, arcade.color.WHITE,
+                         18, anchor_x="center")
+
+    def on_key_press(self, key, modifiers):
+        if key == arcade.key.BACKSPACE and not self.resultado_salvo:
+            self.nome_jogador = self.nome_jogador[:-1]
+        elif key == arcade.key.ENTER:
+            self.salvar_resultado()
+        elif key == arcade.key.R and self.resultado_salvo:
+            self.window.show_view(TelaRanking())
+        elif key == arcade.key.ESCAPE:
+            self.salvar_resultado()
+            self.window.show_view(TelaMenu())
+
+
+class TelaGanhou(TelaFim):
+    def __init__(self, pontuacao, tempo):
+        super().__init__(pontuacao, tempo)
         arcade.set_background_color(arcade.color.PURPLE)
         self.cenario_sprite = arcade.Sprite("cenario_inicial.jpg")
         self.cenario_sprite.width = LARGURA
@@ -527,23 +566,14 @@ class TelaGanhou(arcade.View):
                          arcade.color.WHITE, 40, anchor_x="center")
         arcade.draw_text(f"TEMPO {self.tempo:.1f}s", LARGURA / 2, 240,
                          arcade.color.WHITE, 24, anchor_x="center")
-        arcade.draw_text("Pressione ESC para voltar ao menu", LARGURA / 2, 160,
-                         arcade.color.WHITE, 18, anchor_x="center")
-
-    def on_key_press(self, key, modifiers):
-        # A partida termina nesta tela; ESC permite iniciar outra pelo menu.
-        if key == arcade.key.ESCAPE:
-            self.window.show_view(TelaMenu())
+        self.desenhar_campo_nome()
 
 
 #Tela de derrota, é disparada através do evento no titã puro, que persegue o jogador
 # Tela final de derrota, exibida quando o inimigo perseguidor alcança o jogador.
-class TelaPerdeu(arcade.View):
+class TelaPerdeu(TelaFim):
     def __init__(self, pontuacao, tempo):
-        super().__init__()
-        # Mantém os dados da sessão para apresentá-los após a troca de tela.
-        self.pontuacao = pontuacao
-        self.tempo = tempo
+        super().__init__(pontuacao, tempo)
         arcade.set_background_color(arcade.color.DARK_RED)
 
     def on_draw(self):
@@ -556,13 +586,7 @@ class TelaPerdeu(arcade.View):
         arcade.draw_text(f"Pontuação: {self.pontuacao}   Tempo: {self.tempo:.1f}s",
                  LARGURA / 2, ALTURA / 2 - 35,
                  arcade.color.WHITE, 20, anchor_x="center")
-        arcade.draw_text("Pressione ESC para voltar ao menu", LARGURA / 2, ALTURA / 2 - 60,
-                         arcade.color.WHITE, 18, anchor_x="center")
-
-    def on_key_press(self, key, modifiers):
-        # Retorna à tela inicial para permitir uma nova partida.
-        if key == arcade.key.ESCAPE:
-            self.window.show_view(TelaMenu())
+        self.desenhar_campo_nome()
 
 #Janela Final com as váriaveis necessárias
 # View principal da partida: concentra o estado do jogo e coordena seus sprites.
@@ -577,7 +601,6 @@ class JogoAtaqueDoTita(arcade.View):
         self.registro = 0
         self.velocidade = 5
         self.tempo = 0
-        self.resultado_registrado = False
         self.mensagem = ""
         self.tempo_mensagem = 0
         self.velocidade_ini = 2
@@ -690,12 +713,6 @@ class JogoAtaqueDoTita(arcade.View):
         self.moeda_especial.change_y = self.velocidade
         self.sprite_moeda_especial.append(self.moeda_especial)
 
-    def salvar_resultado(self):
-        # Guarda o placar uma única vez, mesmo que mais de um evento final ocorra.
-        if not self.resultado_registrado:
-            registrar_resultado(self.pontuacao, self.tempo)
-            self.resultado_registrado = True
-
     def on_draw(self):
         # Desenha as camadas do jogo e o HUD (informações sobrepostas à área de jogo).
         self.clear()
@@ -775,7 +792,6 @@ class JogoAtaqueDoTita(arcade.View):
 
         if titas_puros:
             # A colisão com o perseguidor encerra imediatamente a sessão.
-            self.salvar_resultado()
             self.window.show_view(TelaPerdeu(self.pontuacao, self.tempo))
             return
 
@@ -815,8 +831,6 @@ class JogoAtaqueDoTita(arcade.View):
         # Uma SpriteList vazia sinaliza que todos os itens foram coletados e que
         # a condição de vitória foi atingida.
         if len(self.sprite_moeda_especial) == 0 and len(self.sprite_moedas) == 0:
-            # Registra o resultado antes de trocar para a tela de vitória.
-            self.salvar_resultado()
             tela_final = TelaGanhou(self.pontuacao, self.tempo)
             self.window.show_view(tela_final)
 
