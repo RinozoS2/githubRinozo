@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 # Pillow permite recortar, redimensionar e espelhar imagens para as animações.
 from PIL import Image
@@ -69,21 +70,65 @@ def obter_ranking():
 
 #Propriedades da janela
 # Configuração global da área de jogo; coordenadas e limites usam esses valores.
-ESCALA = 1.5
+ESCALA = 1.2
 LARGURA_BASE = 800
 ALTURA_BASE = 600
+ALTURA_LAYOUT_BASE = 600
 LARGURA = int(LARGURA_BASE * ESCALA)
 ALTURA = int(ALTURA_BASE * ESCALA)
 GRAVIDADE = 0.45 * ESCALA
+_texturas_fundo = {}
 
 
 def escalar(valor):
     return valor * ESCALA
 
 
+def preparar_camera_interface(janela):
+    largura, altura = janela.get_size()
+    camera = janela.default_camera
+    camera.viewport = arcade.LBWH(0, 0, largura, altura)
+    camera.use()
+
+
+def carregar_textura_fundo(nome_arquivo="menu.png"):
+    if nome_arquivo not in _texturas_fundo:
+        caminho = Path(__file__).with_name(nome_arquivo)
+        with Image.open(caminho) as imagem:
+            imagem.draft("RGB", (LARGURA, ALTURA))
+            proporcao_tela = LARGURA / ALTURA
+            proporcao_imagem = imagem.width / imagem.height
+            if proporcao_imagem > proporcao_tela:
+                largura = round(imagem.height * proporcao_tela)
+                esquerda = (imagem.width - largura) // 2
+                imagem = imagem.crop(
+                    (esquerda, 0, esquerda + largura, imagem.height)
+                )
+            else:
+                altura = round(imagem.width / proporcao_tela)
+                topo = (imagem.height - altura) // 2
+                imagem = imagem.crop(
+                    (0, topo, imagem.width, topo + altura)
+                )
+            imagem = imagem.convert("RGBA").resize(
+                (LARGURA, ALTURA), Image.Resampling.LANCZOS
+            )
+        chave = Path(nome_arquivo).stem
+        _texturas_fundo[nome_arquivo] = arcade.Texture(
+            imagem, hash=f"{chave}-background-{LARGURA}x{ALTURA}"
+        )
+    return _texturas_fundo[nome_arquivo]
+
+
 def desenhar_texto(texto, x, y, cor, tamanho, *args, **kwargs):
     arcade.draw_text(
-        texto, escalar(x), escalar(y), cor, escalar(tamanho), *args, **kwargs
+        texto,
+        escalar(x),
+        escalar(y * ALTURA_BASE / ALTURA_LAYOUT_BASE),
+        cor,
+        escalar(tamanho * ALTURA_BASE / ALTURA_LAYOUT_BASE),
+        *args,
+        **kwargs,
     )
 
 
@@ -677,7 +722,7 @@ class Player(arcade.Sprite):
 # obstáculo estático contra o qual o jogador e inimigos podem colidir.
 class Bloco(arcade.Sprite):
     def __init__(self, x: float, y: float):
-        super().__init__("muro.jpg", scale=ESCALA)
+        super().__init__("bloco.png", scale=0.052 * ESCALA)
 
         # As coordenadas recebidas definem o centro do bloco no cenário.
         self.center_x = x
@@ -762,14 +807,14 @@ class TitaPuro(arcade.Sprite):
             self.change_y = 0
 
 
-#Criação da tela de menu com suas propriedades e o jpg
+#Criação da tela de menu com suas propriedades e imagem de fundo
 # Tela inicial: apresenta o fundo e encaminha cada tecla para a tela escolhida.
 class TelaMenu(arcade.View):
     def __init__(self):
         super().__init__()
         arcade.set_background_color(arcade.color.WHITE)
         # Ajusta o cenário à janela e guarda-o em SpriteList para desenhá-lo.
-        self.cenario_sprite = arcade.Sprite("cenario_inicial.jpg")
+        self.cenario_sprite = arcade.Sprite(carregar_textura_fundo())
         self.cenario_sprite.width = LARGURA
         self.cenario_sprite.height = ALTURA
         self.cenario_sprite.center_x = LARGURA / 2
@@ -781,24 +826,9 @@ class TelaMenu(arcade.View):
 
     def on_draw(self):
         # on_draw é chamado pelo ciclo do Arcade para redesenhar a tela.
+        preparar_camera_interface(self.window)
         self.clear()
         self.sprite_cenario.draw()
-
-        # As posições definem a composição visual do título e das opções.
-        desenhar_texto("Ataque do Titã", LARGURA_BASE / 2, 520,
-                         arcade.color.WHITE, 50, anchor_x="center")
-        desenhar_texto("MENU", LARGURA_BASE / 2, 420,
-                         arcade.color.WHITE, 40, anchor_x="center")
-
-        desenhar_texto("J - JOGAR", 220, 320, arcade.color.WHITE, 20, anchor_x="left")
-        desenhar_texto("S - SOBRE O JOGO", 220, 280, arcade.color.WHITE, 20, anchor_x="left")
-        desenhar_texto("I - INSTRUÇÃO", 220, 240, arcade.color.WHITE, 20, anchor_x="left")
-        desenhar_texto("R - RANKING", 220, 200, arcade.color.WHITE, 20, anchor_x="left")
-
-        desenhar_texto("Pressione a tecla correspondente", LARGURA_BASE / 2, 150,
-                         arcade.color.WHITE, 16, anchor_x="center")
-        desenhar_texto("ESC - SAIR", LARGURA_BASE / 2, 120,
-                         arcade.color.WHITE, 16, anchor_x="center")
 
     def on_key_press(self,key,modifiers):
         # Cada tecla troca a View ativa; ESC encerra o loop da janela.
@@ -826,6 +856,7 @@ class TelaRanking(arcade.View):
 
     def on_draw(self):
         # Mostra até dez posições por página, formatando pontuação e duração.
+        preparar_camera_interface(self.window)
         self.clear()
         desenhar_texto("RANKING", LARGURA_BASE / 2, 530, arcade.color.WHITE,
                          40, anchor_x="center")
@@ -862,8 +893,9 @@ class TelaInstrucao(arcade.View):
     def __init__(self):
         super().__init__()
         arcade.set_background_color(arcade.color.BLACK)
-        # O fundo é redimensionado para preencher a janela sem mudar a resolução.
-        self.cenario_sprite = arcade.Sprite("cenario_inicial.jpg")
+        self.cenario_sprite = arcade.Sprite(
+            carregar_textura_fundo("telagenerica.png")
+        )
         self.cenario_sprite.width = LARGURA
         self.cenario_sprite.height = ALTURA
         self.cenario_sprite.center_x = LARGURA / 2
@@ -872,43 +904,57 @@ class TelaInstrucao(arcade.View):
         self.sprite_cenario.append(self.cenario_sprite)
 
     def on_draw(self):
-        # Renderiza os textos explicativos agrupados por assunto.
+        preparar_camera_interface(self.window)
         self.clear()
         self.sprite_cenario.draw()
+        arcade.draw_lrbt_rectangle_filled(
+            escalar(35), escalar(765), escalar(90), escalar(540),
+            (0, 0, 0, 205),
+        )
+        desenhar_texto(
+            "COMO JOGAR", LARGURA_BASE / 2, 550,
+            arcade.color.YELLOW, 34, anchor_x="center", bold=True,
+        )
 
-        # Os textos estão separados em objetivos, inimigos e controles.
-        desenhar_texto("INSTRUÇÃO", LARGURA_BASE / 2, 520,
-                         arcade.color.BLUE, 40, anchor_x="center")
+        secoes = (
+            (
+                "OBJETIVO",
+                ("Complete as 3 fases.", "Em cada fase, colete:", "25 titãs comuns + 1 filtro de gás.",
+                 "Titã comum: +1 ponto | Filtro: +5."),
+                75, 455,
+            ),
+            (
+                "CONTROLES",
+                ("A / D  -  mover para os lados", "W ou ESPAÇO  -  pular",
+                 "ESC ou M  -  voltar ao menu"),
+                420, 455,
+            ),
+            (
+                "CUIDADO COM OS INIMIGOS",
+                ("Titã Irracional: tira 1 ponto ao tocar.", "Titã Puro: se alcançar você, a partida acaba."),
+                75, 280,
+            ),
+            (
+                "MODO TITÃ",
+                ("Colete 4 raios para se transformar.", "Fique invencível por 7,5 segundos."),
+                420, 280,
+            ),
+        )
+        for titulo, linhas, x, y in secoes:
+            desenhar_texto(
+                titulo, x, y, arcade.color.YELLOW, 19,
+                anchor_x="left", bold=True,
+            )
+            for indice, linha in enumerate(linhas, start=1):
+                desenhar_texto(
+                    linha, x, y - indice * 32, arcade.color.WHITE, 15,
+                    anchor_x="left",
+                )
 
-        desenhar_texto("OBJETIVOS", 120, 440,
-                         arcade.color.BLUE, 24, anchor_x="left")
-        desenhar_texto("- Colete 25 Titãs (1 ponto)", 120, 410,
-                         arcade.color.WHITE, 16, anchor_x="left")
-        desenhar_texto("- Colete 1 Filtro de gás (5 pontos)", 120, 385,
-                         arcade.color.WHITE, 16, anchor_x="left")
-        desenhar_texto("- Total de 26 pontos para vencer", 120, 360,
-                         arcade.color.WHITE, 16, anchor_x="left")
-
-        desenhar_texto("INIMIGOS", 120, 320,
-                         arcade.color.BLUE, 24, anchor_x="left")
-        desenhar_texto("Titã Irracional: Anda de forma aleatória para te atacar (-1 ponto)", 120, 290,
-                         arcade.color.WHITE, 16, anchor_x="left")
-        desenhar_texto("Titã Puro: te persegue para sempre, não fique perto dele! (Eliminado)", 120, 265,
-                         arcade.color.WHITE, 16, anchor_x="left")
-
-        desenhar_texto("CONTROLES", 450, 440,
-                         arcade.color.BLUE, 24, anchor_x="left")
-        desenhar_texto("W - subir", 450, 410,
-                         arcade.color.WHITE, 16, anchor_x="left")
-        desenhar_texto("A - esquerda", 450, 385,
-                         arcade.color.WHITE, 16, anchor_x="left")
-        desenhar_texto("D - direita", 450, 360,
-                         arcade.color.WHITE, 16, anchor_x="left")
-        desenhar_texto("S - baixo", 450, 335,
-                         arcade.color.WHITE, 16, anchor_x="left")
-
-        desenhar_texto("ESC ou M para voltar ao menu", LARGURA_BASE / 2, 80,
-                         arcade.color.WHITE, 16, anchor_x="center")
+        desenhar_texto(
+            "ESC ou M para voltar ao menu", LARGURA_BASE / 2, 110,
+            arcade.color.WHITE, 15, anchor_x="center",
+        )
         
     def on_key_press(self, key,modyfiers):
         # ESC e M são atalhos de retorno ao menu principal.
@@ -919,50 +965,55 @@ class TelaInstrucao(arcade.View):
 #Criação da tela de Informações e suas prorpeidades
 # Tela de créditos e resumo, com navegação de volta ao menu.
 class TelaSobre(arcade.View):
+    creditos = (
+        ("Desenvolvido por:", ("Enzo R", "Brian", "Lara", "CHATGPT", "IA do VSCODE", "CLOUD")),
+        (
+            "Inspirado em:",
+            ("Attack on titan", "Jojo's Bizarre Adventure", "DanDaDan"),
+        ),
+    )
+    velocidade_creditos = 42
+    altura_creditos = sum(
+        124 + len(nomes) * 34 for _, nomes in creditos
+    )
+
     def __init__(self):
         super().__init__()
         arcade.set_background_color(arcade.color.BLACK)
-        # Reutiliza a imagem de cenário como plano de fundo da tela informativa.
-        self.cenario_sprite = arcade.Sprite("cenario_inicial.jpg")
-        self.cenario_sprite.width = LARGURA
-        self.cenario_sprite.height = ALTURA
-        self.cenario_sprite.center_x = LARGURA / 2
-        self.cenario_sprite.center_y = ALTURA / 2
-        self.sprite_cenario = arcade.SpriteList()
-        self.sprite_cenario.append(self.cenario_sprite)
+        self.posicao_creditos = -140
 
     def on_draw(self):
-        # Desenha os créditos, o objetivo geral e uma referência aos controles.
+        preparar_camera_interface(self.window)
         self.clear()
-        self.sprite_cenario.draw()
 
-        desenhar_texto("SOBRE O JOGO", LARGURA_BASE / 2, 520,
-                         arcade.color.BLUE, 40, anchor_x="center")
-        desenhar_texto("Feito por Enzo e Brian", LARGURA_BASE / 2, 460,
-                         arcade.color.WHITE, 18, anchor_x="center")
-        desenhar_texto("Inspirado em Attack on Titan", LARGURA_BASE / 2, 435,
-                         arcade.color.WHITE, 18, anchor_x="center")
-        desenhar_texto("Com ajuda do professor", LARGURA_BASE / 2, 410,
-                         arcade.color.WHITE, 18, anchor_x="center")
-
-        desenhar_texto("Objetivo:", 120, 340,
-                         arcade.color.BLUE, 20, anchor_x="left")
-        desenhar_texto("Colete todos os recursos sem ser pego pelos inimigos.", 120, 310,
-                         arcade.color.WHITE, 16, anchor_x="left")
-
-        desenhar_texto("Teclas:", 120, 260,
-                         arcade.color.BLUE, 20, anchor_x="left")
-        desenhar_texto("W ou SPACE, A, D para mover", 120, 230,
-                         arcade.color.WHITE, 16, anchor_x="left")
-
-        desenhar_texto("ESC ou M para voltar ao menu", LARGURA_BASE / 2, 90,
-                         arcade.color.WHITE, 16, anchor_x="center")
+        y = self.posicao_creditos
+        for titulo, nomes in self.creditos:
+            y -= 42
+            if -40 <= y <= ALTURA_LAYOUT_BASE + 40:
+                desenhar_texto(
+                    titulo, LARGURA_BASE / 2, y,
+                    arcade.color.YELLOW, 28, anchor_x="center",
+                )
+            y -= 48
+            for nome in nomes:
+                y -= 34
+                if -40 <= y <= ALTURA_LAYOUT_BASE + 40:
+                    desenhar_texto(
+                        nome, LARGURA_BASE / 2, y,
+                        arcade.color.WHITE, 22, anchor_x="center",
+                    )
+            y -= 34
 
     def on_key_press(self, key, modifiers):
         # Troca a View ativa para retornar à navegação principal.
         if key == arcade.key.ESCAPE or key == arcade.key.M:
             tela_menu = TelaMenu()
             self.window.show_view(tela_menu)
+
+    def on_update(self, delta_time):
+        self.posicao_creditos += self.velocidade_creditos * delta_time
+        if self.posicao_creditos > ALTURA_LAYOUT_BASE + self.altura_creditos:
+            self.posicao_creditos = -140
 
 
 #Tela de vitória,  recebe os parametros da pontuação e do tempo do jogador
@@ -986,6 +1037,8 @@ class TelaFim(arcade.View):
         if nome and not self.resultado_salvo:
             registrar_resultado(nome, self.pontuacao, self.tempo)
             self.resultado_salvo = True
+            return True
+        return False
 
     def desenhar_campo_nome(self):
         if self.resultado_salvo:
@@ -999,7 +1052,8 @@ class TelaFim(arcade.View):
         if key == arcade.key.BACKSPACE and not self.resultado_salvo:
             self.nome_jogador = self.nome_jogador[:-1]
         elif key == arcade.key.ENTER:
-            self.salvar_resultado()
+            if self.salvar_resultado():
+                self.window.show_view(TelaMenu())
         elif key == arcade.key.R and self.resultado_salvo:
             self.window.show_view(TelaRanking())
         elif key == arcade.key.ESCAPE:
@@ -1011,7 +1065,7 @@ class TelaGanhou(TelaFim):
     def __init__(self, pontuacao, tempo):
         super().__init__(pontuacao, tempo)
         arcade.set_background_color(arcade.color.PURPLE)
-        self.cenario_sprite = arcade.Sprite("cenario_inicial.jpg")
+        self.cenario_sprite = arcade.Sprite(carregar_textura_fundo())
         self.cenario_sprite.width = LARGURA
         self.cenario_sprite.height = ALTURA
         self.cenario_sprite.center_x = LARGURA / 2
@@ -1021,6 +1075,7 @@ class TelaGanhou(TelaFim):
 
     def on_draw(self):
         # Apresenta o resultado final e uma mensagem adicional para a pontuação especial.
+        preparar_camera_interface(self.window)
         self.clear()
         self.sprite_cenario.draw()
         desenhar_texto("PARABÉNS", LARGURA_BASE / 2, 470,
@@ -1044,13 +1099,22 @@ class TelaPerdeu(TelaFim):
 
     def on_draw(self):
         # Informa o motivo da derrota junto com os dados acumulados até então.
+        preparar_camera_interface(self.window)
         self.clear()
-        desenhar_texto("VOCÊ PERDEU", LARGURA_BASE / 2, ALTURA_BASE / 2 + 40,
+        desenhar_texto(
+            "VOCÊ PERDEU",
+            LARGURA_BASE / 2,
+            ALTURA_LAYOUT_BASE / 2 + 40,
                          arcade.color.WHITE, 50, anchor_x="center")
-        desenhar_texto("O Titã Puro te alcançou.", LARGURA_BASE / 2, ALTURA_BASE / 2,
+        desenhar_texto(
+            "O Titã Puro te alcançou.",
+            LARGURA_BASE / 2,
+            ALTURA_LAYOUT_BASE / 2,
                          arcade.color.WHITE, 24, anchor_x="center")
-        desenhar_texto(f"Pontuação: {self.pontuacao}   Tempo: {self.tempo:.1f}s",
-             LARGURA_BASE / 2, ALTURA_BASE / 2 - 35,
+        desenhar_texto(
+            f"Pontuação: {self.pontuacao}   Tempo: {self.tempo:.1f}s",
+            LARGURA_BASE / 2,
+            ALTURA_LAYOUT_BASE / 2 - 35,
                  arcade.color.WHITE, 20, anchor_x="center")
         self.desenhar_campo_nome()
 
@@ -1320,10 +1384,6 @@ class JogoAtaqueDoTita(arcade.View):
             f"ITENS {len(self.sprite_moedas) + len(self.sprite_moeda_especial)}",
             635, 560, arcade.color.WHITE, 14, anchor_x="center"
         )
-        desenhar_texto(
-            f"IMORTAL {'ON' if self.imortal_admin else 'OFF'} (L)",
-            LARGURA_BASE - 14, 560, arcade.color.GREEN, 14, anchor_x="right"
-        )
         self.sprite_barra_tita.draw()
         if self.tempo_mensagem > 0:
             desenhar_texto(self.mensagem, LARGURA_BASE / 2, 470,
@@ -1561,6 +1621,113 @@ class TestDamageAnimation(unittest.TestCase):
 
     def tearDown(self):
         os.chdir(self.diretorio_original)
+
+    def test_background_texture_matches_window_proportions(self):
+        textura = carregar_textura_fundo()
+
+        self.assertEqual((LARGURA, ALTURA), (960, 720))
+        self.assertEqual(textura.image.size, (LARGURA, ALTURA))
+        self.assertAlmostEqual(
+            textura.width / textura.height, 4 / 3
+        )
+
+    def test_instruction_background_uses_generic_screen_image(self):
+        textura = carregar_textura_fundo("telagenerica.png")
+
+        self.assertEqual(textura.image.size, (LARGURA, ALTURA))
+        self.assertIs(textura, carregar_textura_fundo("telagenerica.png"))
+
+    def test_window_dimensions_remain_960x720(self):
+        self.assertEqual((LARGURA, ALTURA), (960, 720))
+
+    def test_blocks_use_the_scaled_block_texture(self):
+        bloco = Bloco(0, 0)
+
+        self.assertEqual(bloco.texture.image.size, (1274, 1235))
+        self.assertGreater(bloco.width, escalar(64))
+        self.assertLess(bloco.width, 82)
+
+    def test_interface_camera_matches_resized_window(self):
+        class CameraTeste:
+            viewport = None
+            ativada = False
+
+            def use(self):
+                self.ativada = True
+
+        class JanelaTeste:
+            default_camera = CameraTeste()
+
+            def get_size(self):
+                return 960, 720
+
+        janela = JanelaTeste()
+        preparar_camera_interface(janela)
+
+        self.assertEqual(janela.default_camera.viewport.width, 960)
+        self.assertEqual(janela.default_camera.viewport.height, 720)
+        self.assertTrue(janela.default_camera.ativada)
+
+    def test_about_screen_scrolls_requested_credits(self):
+        linhas_creditos = [
+            linha
+            for titulo, nomes in TelaSobre.creditos
+            for linha in (titulo, *nomes)
+        ]
+        self.assertEqual(
+            linhas_creditos,
+            [
+                "Desenvolvido por:",
+                "Enzo R",
+                "Brian",
+                "Lara",
+                "CHATGPT",
+                "IA do VSCODE",
+                "CLOUD",
+                "Inspirado em:",
+                "Attack on titan",
+                "Jojo's Bizarre Adventure",
+                "DanDaDan",
+            ],
+        )
+
+        tela_sobre = TelaSobre.__new__(TelaSobre)
+        tela_sobre.posicao_creditos = -140
+        tela_sobre.on_update(1)
+        self.assertEqual(tela_sobre.posicao_creditos, -98)
+
+        tela_sobre.posicao_creditos = (
+            ALTURA_LAYOUT_BASE + TelaSobre.altura_creditos
+        )
+        tela_sobre.on_update(1)
+        self.assertEqual(tela_sobre.posicao_creditos, -140)
+
+    def test_enter_saving_result_returns_to_menu(self):
+        class JanelaTeste:
+            tela_atual = None
+
+            def show_view(self, tela):
+                self.tela_atual = tela
+
+        janela = JanelaTeste()
+        tela_fim = TelaFim.__new__(TelaPerdeu)
+        tela_fim.pontuacao = 0
+        tela_fim.tempo = 12.5
+        tela_fim.nome_jogador = "Jogador"
+        tela_fim.resultado_salvo = False
+        tela_fim.window = janela
+        menu = object()
+
+        with patch.object(
+            sys.modules[__name__], "registrar_resultado"
+        ) as registrar, patch.object(
+            sys.modules[__name__], "TelaMenu", return_value=menu
+        ):
+            TelaFim.on_key_press(tela_fim, arcade.key.ENTER, 0)
+
+        registrar.assert_called_once_with("Jogador", 0, 12.5)
+        self.assertIs(janela.tela_atual, menu)
+        self.assertTrue(tela_fim.resultado_salvo)
 
     def test_damage_animation_returns_to_normal_movement(self):
         self.jogador.receber_dano()
