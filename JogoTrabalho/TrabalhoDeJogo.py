@@ -77,6 +77,8 @@ ALTURA_LAYOUT_BASE = 600
 LARGURA = int(LARGURA_BASE * ESCALA)
 ALTURA = int(ALTURA_BASE * ESCALA)
 GRAVIDADE = 0.45 * ESCALA
+ESPACAMENTO_CHAO = 60
+ALTURA_CHAO = 32
 _texturas_fundo = {}
 
 
@@ -87,7 +89,8 @@ def escalar(valor):
 def preparar_camera_interface(janela):
     largura, altura = janela.get_size()
     camera = janela.default_camera
-    camera.viewport = arcade.LBWH(0, 0, largura, altura)
+    if camera.viewport is None or camera.viewport.lbwh_int != (0, 0, largura, altura):
+        camera.viewport = arcade.LBWH(0, 0, largura, altura)
     camera.use()
 
 
@@ -332,6 +335,7 @@ class Player(arcade.Sprite):
         self.indice_animacao_pulo = 0
         self.duracao_quadro_pulo = 0.12
         self.tempo_dano = 0
+        self.tempo_cintilacao_dano = 0
         self.tempo_animacao = 0
         self.indice_animacao = 0
         self.duracao_quadro = 0.1
@@ -521,6 +525,8 @@ class Player(arcade.Sprite):
     def receber_dano(self):
         # Reinicia a janela de tempo durante a qual o sprite aparece danificado.
         self.tempo_dano = 1.5
+        self.tempo_cintilacao_dano = 0
+        self.alpha = 255
 
     def iniciar_animacao_pulo(self):
         self.animacao_pulo_ativa = True
@@ -535,6 +541,8 @@ class Player(arcade.Sprite):
         self.tempo_transformacao = 0
         self.indice_transformacao = 0
         self.tempo_dano = 0
+        self.tempo_cintilacao_dano = 0
+        self.alpha = 255
         self.change_x = 0
         self.texture = self.texturas_transformacao[0]
         self.bottom = base_anterior
@@ -613,8 +621,13 @@ class Player(arcade.Sprite):
         if self.tempo_dano > 0:
             self.tempo_dano = max(0, self.tempo_dano - delta_time)
             if self.tempo_dano > 0:
+                self.tempo_cintilacao_dano += delta_time
+                fase_cintilacao = int(self.tempo_cintilacao_dano / 0.12)
+                self.alpha = 85 if fase_cintilacao % 2 else 255
                 self.texture = self.textura_dano
                 return
+            self.tempo_cintilacao_dano = 0
+            self.alpha = 255
 
         if self.animacao_pulo_ativa and not self.esta_pulando:
             self.animacao_pulo_ativa = False
@@ -666,11 +679,18 @@ class Player(arcade.Sprite):
             self.animacao_pulo_concluida = False
             self.tempo_animacao = 0
             self.indice_animacao = 0
-            self.texture = (
-                self.texture_parado_esquerda
-                if self.virado_para == "esquerda"
-                else self.texture_parado
-            )
+            if self.em_forma_tita:
+                self.texture = (
+                    self.textura_tita_idle_esquerda
+                    if self.virado_para == "esquerda"
+                    else self.textura_tita_idle
+                )
+            else:
+                self.texture = (
+                    self.texture_parado_esquerda
+                    if self.virado_para == "esquerda"
+                    else self.texture_parado
+                )
         elif self.change_x != 0:
             self.animacao_pulo_concluida = False
             if self.em_forma_tita:
@@ -1044,7 +1064,10 @@ class TelaFim(arcade.View):
         if self.resultado_salvo:
             texto = "Resultado salvo. R - ranking"
         else:
-            texto = f"Nome: {self.nome_jogador or '_'}  |  ENTER - salvar"
+            texto = (
+                f"Nome: {self.nome_jogador or '_'}  |  "
+                "ENTER - salvar e voltar ao menu"
+            )
         desenhar_texto(texto, LARGURA_BASE / 2, 115, arcade.color.WHITE,
                          18, anchor_x="center")
 
@@ -1064,20 +1087,12 @@ class TelaFim(arcade.View):
 class TelaGanhou(TelaFim):
     def __init__(self, pontuacao, tempo):
         super().__init__(pontuacao, tempo)
-        arcade.set_background_color(arcade.color.PURPLE)
-        self.cenario_sprite = arcade.Sprite(carregar_textura_fundo())
-        self.cenario_sprite.width = LARGURA
-        self.cenario_sprite.height = ALTURA
-        self.cenario_sprite.center_x = LARGURA / 2
-        self.cenario_sprite.center_y = ALTURA / 2
-        self.sprite_cenario = arcade.SpriteList()
-        self.sprite_cenario.append(self.cenario_sprite)
+        arcade.set_background_color(arcade.color.FOREST_GREEN)
 
     def on_draw(self):
         # Apresenta o resultado final e uma mensagem adicional para a pontuação especial.
         preparar_camera_interface(self.window)
         self.clear()
-        self.sprite_cenario.draw()
         desenhar_texto("PARABÉNS", LARGURA_BASE / 2, 470,
                          arcade.color.WHITE, 50, anchor_x="center")
         if self.pontuacao == 30:
@@ -1121,6 +1136,9 @@ class TelaPerdeu(TelaFim):
 #Janela Final com as váriaveis necessárias
 # View principal da partida: concentra o estado do jogo e coordena seus sprites.
 class JogoAtaqueDoTita(arcade.View):
+    duracao_paralisia_item = 3.0
+    duracao_efeito_azul_item = 1.6
+
     def __init__(self):
         super().__init__()
         arcade.set_background_color(arcade.color.AMAZON)
@@ -1158,6 +1176,21 @@ class JogoAtaqueDoTita(arcade.View):
         # O tempo restante controla simultaneamente o tremor e o filtro vermelho.
         self.tempo_efeito_colisao = 0
         self.duracao_efeito_colisao = 0.4
+        self.inventario_itens = []
+        self.texturas_itens = {
+            1: arcade.load_texture(
+                str(Path(__file__).with_name("iten_1.png"))
+            ),
+            2: arcade.load_texture(
+                str(Path(__file__).with_name("iten_2.png"))
+            ),
+        }
+        self.tempo_paralisia_inimigos = 0
+        self.efeito_visual_item = None
+        self.tempo_efeito_visual_item = 0
+        self.tempo_efeito_visual_decorrido = 0
+        self._filtro_tela = None
+        self._filtro_tela_tamanho = None
 
         self.sprite_raios = arcade.SpriteList()
         self.texturas_barra_tita = carregar_estados_barra()
@@ -1176,8 +1209,8 @@ class JogoAtaqueDoTita(arcade.View):
 
         # O chão é formado por blocos lado a lado; outros blocos elevam plataformas.
         self.sprite_blocos = arcade.SpriteList()
-        for x in range(32, LARGURA_BASE + 32, 64):
-            chao = Bloco(x=escalar(x), y=escalar(30))
+        for x in range(32, LARGURA_BASE + 32, ESPACAMENTO_CHAO):
+            chao = Bloco(x=escalar(x), y=escalar(ALTURA_CHAO))
             self.sprite_blocos.append(chao)
 
         # Coordenadas dos centros das duas plataformas suspensas.
@@ -1227,6 +1260,230 @@ class JogoAtaqueDoTita(arcade.View):
         self.sprite_moeda_especial = arcade.SpriteList()
         self.definir_dificuldade()
         self.criar_coletaveis()
+        fator_texto = ALTURA_BASE / ALTURA_LAYOUT_BASE
+        self.textos_hud = (
+            arcade.Text(
+                "", escalar(14), escalar(560 * fator_texto),
+                arcade.color.WHITE, escalar(14 * fator_texto),
+            ),
+            arcade.Text(
+                "", escalar(180), escalar(560 * fator_texto),
+                arcade.color.WHITE, escalar(14 * fator_texto),
+                anchor_x="center",
+            ),
+            arcade.Text(
+                "", escalar(330), escalar(560 * fator_texto),
+                arcade.color.WHITE, escalar(14 * fator_texto),
+                anchor_x="center",
+            ),
+            arcade.Text(
+                "", escalar(490), escalar(560 * fator_texto),
+                arcade.color.YELLOW, escalar(14 * fator_texto),
+                anchor_x="center",
+            ),
+            arcade.Text(
+                "", escalar(635), escalar(560 * fator_texto),
+                arcade.color.WHITE, escalar(14 * fator_texto),
+                anchor_x="center",
+            ),
+        )
+
+    def receber_item_aleatorio(self):
+        item = random.choice((1, 2))
+        self.inventario_itens.append(item)
+        return item
+
+    def coletar_moedas_automaticamente(self, quantidade=5):
+        moedas_coletadas = list(self.sprite_moedas)[:quantidade]
+        for moeda in moedas_coletadas:
+            moeda.remove_from_sprite_lists()
+            self.pontuacao += 1
+            self.registro += 1
+        return len(moedas_coletadas)
+
+    def usar_item(self):
+        if not self.inventario_itens:
+            return None
+
+        item = self.inventario_itens.pop(0)
+        self.tempo_efeito_visual_decorrido = 0
+        if item == 1:
+            self.tempo_paralisia_inimigos = self.duracao_paralisia_item
+            self.efeito_visual_item = "monocromatico"
+            self.tempo_efeito_visual_item = self.duracao_paralisia_item
+        else:
+            self.coletar_moedas_automaticamente()
+            self.efeito_visual_item = "azul"
+            self.tempo_efeito_visual_item = self.duracao_efeito_azul_item
+        return item
+
+    def atualizar_efeitos_itens(self, delta_time):
+        self.tempo_paralisia_inimigos = max(
+            0, self.tempo_paralisia_inimigos - delta_time
+        )
+        if self.tempo_efeito_visual_item > 0:
+            self.tempo_efeito_visual_item = max(
+                0, self.tempo_efeito_visual_item - delta_time
+            )
+            self.tempo_efeito_visual_decorrido += delta_time
+            if self.tempo_efeito_visual_item == 0:
+                self.efeito_visual_item = None
+                self.tempo_efeito_visual_decorrido = 0
+
+    def preparar_filtro_tela(self):
+        tamanho = self.window.get_framebuffer_size()
+        if self._filtro_tela_tamanho == tamanho:
+            return
+
+        from arcade.gl import geometry
+
+        ctx = self.window.ctx
+        textura = ctx.texture(tamanho, components=4)
+        framebuffer = ctx.framebuffer(color_attachments=[textura])
+        programa = ctx.program(
+            vertex_shader="""
+                #version 330
+                in vec2 in_vert;
+                in vec2 in_uv;
+                out vec2 uv;
+                void main() {
+                    gl_Position = vec4(in_vert, 0.0, 1.0);
+                    uv = in_uv;
+                }
+            """,
+            fragment_shader="""
+                #version 330
+                uniform sampler2D screen_texture;
+                uniform int effect_mode;
+                uniform float tint_opacity;
+                uniform vec2 shake_offset;
+                in vec2 uv;
+                out vec4 frag_color;
+                void main() {
+                    vec2 sample_uv = clamp(
+                        uv + shake_offset, vec2(0.0), vec2(1.0)
+                    );
+                    vec4 color = texture(screen_texture, sample_uv);
+                    if (effect_mode == 1) {
+                        float gray = dot(
+                            color.rgb, vec3(0.2126, 0.7152, 0.0722)
+                        );
+                        color.rgb = vec3(gray);
+                    } else if (effect_mode == 2) {
+                        color.rgb = mix(
+                            color.rgb, vec3(0.015, 0.045, 0.16),
+                            tint_opacity
+                        );
+                    } else if (effect_mode == 3) {
+                        color.rgb = mix(
+                            color.rgb, vec3(1.0, 0.78, 0.05),
+                            tint_opacity
+                        );
+                    }
+                    frag_color = color;
+                }
+            """,
+        )
+        self._filtro_tela = (
+            textura, framebuffer, programa, geometry.quad_2d_fs()
+        )
+        self._filtro_tela_tamanho = tamanho
+
+    def desenhar_com_filtro_tela(self):
+        self.preparar_filtro_tela()
+        textura, framebuffer, programa, quad = self._filtro_tela
+        framebuffer.use()
+        framebuffer.clear(color=(0, 0, 0, 255))
+        self._desenhar_cena()
+
+        self.window.use()
+        textura.use(0)
+        programa["screen_texture"] = 0
+        if self.efeito_visual_item == "monocromatico":
+            programa["effect_mode"] = 1
+            programa["tint_opacity"] = 0.0
+            programa["shake_offset"] = (0.0, 0.0)
+        else:
+            deslocamento = (
+                random.uniform(-5, 5) / self._filtro_tela_tamanho[0],
+                random.uniform(-5, 5) / self._filtro_tela_tamanho[1],
+            )
+            if self.efeito_visual_item == "amarelo":
+                duracao = (
+                    len(self.jogador.texturas_transformacao)
+                    * self.jogador.duracao_quadro_transformacao
+                )
+                tempo_fade = 0.2
+                programa["effect_mode"] = 3
+            else:
+                duracao = self.duracao_efeito_azul_item
+                tempo_fade = 0.35
+                programa["effect_mode"] = 2
+            opacidade = min(
+                0.72,
+                self.tempo_efeito_visual_decorrido / tempo_fade,
+                self.tempo_efeito_visual_item / min(
+                    0.3 if self.efeito_visual_item == "azul" else tempo_fade,
+                    duracao,
+                ),
+            )
+            programa["tint_opacity"] = max(0.0, opacidade)
+            programa["shake_offset"] = deslocamento
+        quad.render(programa)
+
+    def desenhar_hud_item(self):
+        tamanho = escalar(58)
+        margem = escalar(18)
+        direita = LARGURA - margem
+        topo = ALTURA - escalar(88)
+        esquerda = direita - tamanho
+        baixo = topo - tamanho
+
+        arcade.draw_lrbt_rectangle_filled(
+            esquerda, direita, baixo, topo, (0, 0, 0, 210)
+        )
+        borda = escalar(3)
+        for x1, x2, y1, y2 in (
+            (esquerda, direita, topo - borda, topo),
+            (esquerda, direita, baixo, baixo + borda),
+            (esquerda, esquerda + borda, baixo, topo),
+            (direita - borda, direita, baixo, topo),
+        ):
+            arcade.draw_lrbt_rectangle_filled(
+                x1, x2, y1, y2, arcade.color.WHITE
+            )
+
+        if not self.inventario_itens:
+            return
+
+        item = self.inventario_itens[0]
+        textura = self.texturas_itens[item]
+        area = tamanho - escalar(12)
+        escala = min(area / textura.width, area / textura.height)
+        largura = textura.width * escala
+        altura = textura.height * escala
+        arcade.draw_texture_rect(
+            textura,
+            arcade.LBWH(
+                (esquerda + direita) / 2 - largura / 2,
+                baixo + tamanho / 2 - altura / 2,
+                largura,
+                altura,
+            ),
+        )
+        nome = "The World" if item == 1 else "The Hand"
+        desenhar_texto(
+            f"(Z) {nome}", (esquerda + direita) / (2 * ESCALA),
+            (baixo - escalar(19)) / ESCALA, arcade.color.WHITE, 13,
+            anchor_x="center",
+        )
+        if len(self.inventario_itens) > 1:
+            desenhar_texto(
+                f"x{len(self.inventario_itens)}",
+                (direita - escalar(12)) / ESCALA,
+                (topo - escalar(12)) / ESCALA,
+                arcade.color.YELLOW, 12, anchor_x="right",
+            )
 
     def definir_dificuldade(self):
         multiplicador = self.multiplicadores_inimigos[self.fase_atual - 1]
@@ -1291,6 +1548,12 @@ class JogoAtaqueDoTita(arcade.View):
         self.temporizador_tita_iniciado = False
         self.tempo_invencibilidade = 0
         self.jogador.transformar_em_tita()
+        self.efeito_visual_item = "amarelo"
+        self.tempo_efeito_visual_decorrido = 0
+        self.tempo_efeito_visual_item = (
+            len(self.jogador.texturas_transformacao)
+            * self.jogador.duracao_quadro_transformacao
+        )
         self.sprite_raios.clear()
         self.mensagem = "MODO TITÃ: INVENCÍVEL!"
         self.tempo_mensagem = 2.0
@@ -1330,6 +1593,12 @@ class JogoAtaqueDoTita(arcade.View):
                 break
 
     def on_draw(self):
+        if self.efeito_visual_item is None:
+            self._desenhar_cena()
+        else:
+            self.desenhar_com_filtro_tela()
+
+    def _desenhar_cena(self):
         # Desenha as camadas do jogo e o HUD (informações sobrepostas à área de jogo).
         self.clear()
         # O tremor diminui junto com o tempo restante do efeito após a colisão.
@@ -1370,21 +1639,18 @@ class JogoAtaqueDoTita(arcade.View):
         arcade.draw_lrbt_rectangle_filled(
             0, LARGURA, ALTURA - escalar(80), ALTURA, (12, 20, 28, 210)
         )
-        desenhar_texto(f"PONTOS {self.pontuacao}", 14, 560,
-                       arcade.color.WHITE, 14)
-        desenhar_texto(f"TEMPO {self.tempo:.1f}s", 180, 560,
-                       arcade.color.WHITE, 14, anchor_x="center")
-        desenhar_texto(f"FASE {self.fase_atual}/{self.total_fases}", 330, 560,
-                       arcade.color.WHITE, 14, anchor_x="center")
-        desenhar_texto(
-            f"NÍVEL {self.dificuldades[self.fase_atual - 1]}", 490, 560,
-            arcade.color.YELLOW, 14, anchor_x="center"
-        )
-        desenhar_texto(
+        textos_hud = (
+            f"PONTOS {self.pontuacao}",
+            f"TEMPO {self.tempo:.1f}s",
+            f"FASE {self.fase_atual}/{self.total_fases}",
+            f"NÍVEL {self.dificuldades[self.fase_atual - 1]}",
             f"ITENS {len(self.sprite_moedas) + len(self.sprite_moeda_especial)}",
-            635, 560, arcade.color.WHITE, 14, anchor_x="center"
         )
+        for texto, objeto_texto in zip(textos_hud, self.textos_hud):
+            objeto_texto.text = texto
+            objeto_texto.draw()
         self.sprite_barra_tita.draw()
+        self.desenhar_hud_item()
         if self.tempo_mensagem > 0:
             desenhar_texto(self.mensagem, LARGURA_BASE / 2, 470,
                            arcade.color.WHITE, 20, anchor_x="center")
@@ -1445,11 +1711,12 @@ class JogoAtaqueDoTita(arcade.View):
                 self.jogador.texture = self.jogador.texture_parado
             return
 
+        self.atualizar_efeitos_itens(delta_time)
+
         if self.aguardando_proxima_fase:
             self.tempo_cooldown_fase = max(
                 0, self.tempo_cooldown_fase - delta_time
             )
-            self.tempo += delta_time
             if self.tempo_cooldown_fase == 0:
                 self.avancar_fase()
             return
@@ -1465,7 +1732,9 @@ class JogoAtaqueDoTita(arcade.View):
         # Avança os motores de física e sincroniza o estado de salto com o contato
         # do jogador com o chão/plataformas.
         self.engine_fisica.update()
-        self.engine_fisica_tita_puro.update()
+        inimigos_paralisados = self.tempo_paralisia_inimigos > 0
+        if not inimigos_paralisados:
+            self.engine_fisica_tita_puro.update()
 
         # Atualiza o estado usado pela animação para indicar se o jogador está no ar.
         pode_pular = self.engine_fisica.can_jump()
@@ -1482,8 +1751,9 @@ class JogoAtaqueDoTita(arcade.View):
                 self.temporizador_tita_iniciado = True
                 self.tempo_invencibilidade = self.duracao_modo_tita
         self.sprite_moedas.update(delta_time)
-        self.sprite_titas_irracionais.update(delta_time)
-        self.sprite_titas_puros.update(delta_time)
+        if not inimigos_paralisados:
+            self.sprite_titas_irracionais.update(delta_time)
+            self.sprite_titas_puros.update(delta_time)
         self.sprite_moeda_especial.update(delta_time)
         self.atualizar_raios(delta_time)
         self.tempo += delta_time
@@ -1508,7 +1778,11 @@ class JogoAtaqueDoTita(arcade.View):
         titas_puros = arcade.check_for_collision_with_list(self.jogador, self.sprite_titas_puros)
         titas_irracionais = arcade.check_for_collision_with_list(self.jogador, self.sprite_titas_irracionais)
 
-        invulneravel = self.is_invencivel or self.imortal_admin
+        invulneravel = (
+            self.is_invencivel
+            or self.imortal_admin
+            or inimigos_paralisados
+        )
         if titas_puros and not invulneravel:
             # A colisão com o perseguidor encerra imediatamente a sessão.
             self.window.show_view(TelaPerdeu(self.pontuacao, self.tempo))
@@ -1546,6 +1820,7 @@ class JogoAtaqueDoTita(arcade.View):
             # O registro conta itens coletados, não pontos concedidos.
             self.pontuacao += 5
             self.registro += 1
+            self.receber_item_aleatorio()
             print(self.pontuacao)
 
         #O len conta quantos elementos tem na lista, se for 0, significa que o jogador coletou todas as moedas
@@ -1569,6 +1844,9 @@ class JogoAtaqueDoTita(arcade.View):
             self.window.show_view(TelaMenu())
             return
         if not self.jogo_iniciado:
+            return
+        if key == arcade.key.Z:
+            self.usar_item()
             return
         if key == arcade.key.P and not self.is_invencivel:
             self.raios_coletados = 4
@@ -1647,6 +1925,121 @@ class TestDamageAnimation(unittest.TestCase):
         self.assertGreater(bloco.width, escalar(64))
         self.assertLess(bloco.width, 82)
 
+    def test_random_reward_adds_item_to_inventory(self):
+        jogo = JogoAtaqueDoTita.__new__(JogoAtaqueDoTita)
+        jogo.inventario_itens = []
+
+        with patch.object(random, "choice", return_value=1):
+            item = jogo.receber_item_aleatorio()
+
+        self.assertEqual(item, 1)
+        self.assertEqual(jogo.inventario_itens, [1])
+
+    def test_world_item_stuns_enemies_and_activates_grayscale(self):
+        jogo = JogoAtaqueDoTita.__new__(JogoAtaqueDoTita)
+        jogo.inventario_itens = [1]
+        jogo.tempo_efeito_visual_decorrido = 0
+
+        self.assertEqual(jogo.usar_item(), 1)
+        self.assertEqual(jogo.tempo_paralisia_inimigos, 3.0)
+        self.assertEqual(jogo.efeito_visual_item, "monocromatico")
+        self.assertEqual(jogo.tempo_efeito_visual_item, 3.0)
+        self.assertEqual(jogo.inventario_itens, [])
+
+    def test_world_item_effects_expire_after_three_seconds(self):
+        jogo = JogoAtaqueDoTita.__new__(JogoAtaqueDoTita)
+        jogo.tempo_paralisia_inimigos = 3.0
+        jogo.efeito_visual_item = "monocromatico"
+        jogo.tempo_efeito_visual_item = 3.0
+        jogo.tempo_efeito_visual_decorrido = 0
+
+        jogo.atualizar_efeitos_itens(3.0)
+
+        self.assertEqual(jogo.tempo_paralisia_inimigos, 0)
+        self.assertIsNone(jogo.efeito_visual_item)
+        self.assertEqual(jogo.tempo_efeito_visual_item, 0)
+
+    def test_titan_transformation_uses_shaking_yellow_screen_effect(self):
+        class ListaRaiosTeste:
+            foi_limpa = False
+
+            def clear(self):
+                self.foi_limpa = True
+
+        jogo = JogoAtaqueDoTita.__new__(JogoAtaqueDoTita)
+        jogo.is_invencivel = False
+        jogo.temporizador_tita_iniciado = False
+        jogo.tempo_invencibilidade = 0
+        jogo.jogador = self.jogador
+        jogo.sprite_raios = ListaRaiosTeste()
+        jogo.mensagem = ""
+        jogo.tempo_mensagem = 0
+
+        jogo.iniciar_modo_tita()
+
+        self.assertTrue(jogo.is_invencivel)
+        self.assertTrue(self.jogador.em_transformacao)
+        self.assertEqual(jogo.efeito_visual_item, "amarelo")
+        self.assertEqual(
+            jogo.tempo_efeito_visual_item,
+            len(self.jogador.texturas_transformacao)
+            * self.jogador.duracao_quadro_transformacao,
+        )
+        self.assertTrue(jogo.sprite_raios.foi_limpa)
+
+    def test_hand_item_collects_up_to_five_coins_and_activates_blue_effect(self):
+        class MoedaTeste:
+            def __init__(self, lista):
+                self.lista = lista
+
+            def remove_from_sprite_lists(self):
+                self.lista.remove(self)
+
+        jogo = JogoAtaqueDoTita.__new__(JogoAtaqueDoTita)
+        jogo.inventario_itens = [2]
+        jogo.tempo_efeito_visual_decorrido = 0
+        jogo.sprite_moedas = []
+        jogo.sprite_moedas.extend(
+            MoedaTeste(jogo.sprite_moedas) for _ in range(6)
+        )
+        jogo.pontuacao = 0
+        jogo.registro = 0
+
+        self.assertEqual(jogo.usar_item(), 2)
+        self.assertEqual(len(jogo.sprite_moedas), 1)
+        self.assertEqual(jogo.pontuacao, 5)
+        self.assertEqual(jogo.registro, 5)
+        self.assertEqual(jogo.efeito_visual_item, "azul")
+        self.assertEqual(jogo.tempo_efeito_visual_item, 1.6)
+
+    def test_ground_blocks_cover_screen_without_gaps(self):
+        bloco = Bloco(0, 0)
+        posicoes = range(32, LARGURA_BASE + 32, ESPACAMENTO_CHAO)
+
+        self.assertGreater(bloco.width, escalar(ESPACAMENTO_CHAO))
+        self.assertLessEqual(
+            escalar(posicoes[0]) - bloco.width / 2, 0
+        )
+        self.assertGreaterEqual(
+            escalar(posicoes[-1]) + bloco.width / 2, LARGURA
+        )
+
+    def test_idle_and_walk_frames_touch_the_ground(self):
+        chao = Bloco(escalar(32), escalar(ALTURA_CHAO))
+        self.jogador.center_y = escalar(100)
+
+        texturas = [
+            self.jogador.texture_parado,
+            *self.jogador.texturas_andando,
+            *self.jogador.texturas_andando_esquerda,
+        ]
+        for textura in texturas:
+            with self.subTest(textura=textura):
+                self.jogador.texture = textura
+                self.assertAlmostEqual(
+                    self.jogador.bottom, chao.top, delta=1
+                )
+
     def test_interface_camera_matches_resized_window(self):
         class CameraTeste:
             viewport = None
@@ -1667,6 +2060,19 @@ class TestDamageAnimation(unittest.TestCase):
         self.assertEqual(janela.default_camera.viewport.width, 960)
         self.assertEqual(janela.default_camera.viewport.height, 720)
         self.assertTrue(janela.default_camera.ativada)
+
+    def test_game_timer_pauses_during_phase_transition(self):
+        jogo = JogoAtaqueDoTita.__new__(JogoAtaqueDoTita)
+        jogo.jogo_iniciado = True
+        jogo.aguardando_proxima_fase = True
+        jogo.tempo_cooldown_fase = 3
+        jogo.tempo = 42
+
+        with patch.object(JogoAtaqueDoTita, "atualizar_efeitos_itens"):
+            jogo.on_update(0.5)
+
+        self.assertEqual(jogo.tempo, 42)
+        self.assertEqual(jogo.tempo_cooldown_fase, 2.5)
 
     def test_about_screen_scrolls_requested_credits(self):
         linhas_creditos = [
@@ -1729,17 +2135,41 @@ class TestDamageAnimation(unittest.TestCase):
         self.assertIs(janela.tela_atual, menu)
         self.assertTrue(tela_fim.resultado_salvo)
 
+    def test_victory_screen_uses_solid_green_background(self):
+        with patch.object(arcade.View, "__init__", lambda self: None), patch.object(
+            arcade, "set_background_color"
+        ) as definir_fundo:
+            tela = TelaGanhou(25, 30)
+
+        definir_fundo.assert_called_once_with(arcade.color.FOREST_GREEN)
+        self.assertFalse(hasattr(tela, "sprite_cenario"))
+
     def test_damage_animation_returns_to_normal_movement(self):
         self.jogador.receber_dano()
         self.jogador.update(0.01)
 
         self.assertEqual(self.jogador.texture, self.jogador.textura_dano)
+        self.assertEqual(self.jogador.alpha, 255)
+        self.jogador.update(0.12)
+        self.assertEqual(self.jogador.alpha, 85)
+        self.jogador.update(0.12)
+        self.assertEqual(self.jogador.alpha, 255)
         self.jogador.update(1.6)
 
         self.assertEqual(self.jogador.tempo_dano, 0)
         self.assertEqual(self.jogador.texture, self.jogador.texture_parado)
+        self.assertEqual(self.jogador.alpha, 255)
         self.assertEqual(self.jogador.change_x, 0)
         self.assertEqual(self.jogador.change_y, 0)
+
+    def test_titan_does_not_use_normal_idle_texture_in_air(self):
+        self.jogador.em_forma_tita = True
+        self.jogador.esta_pulando = True
+        self.jogador.virado_para = "direita"
+
+        self.jogador.update(0.016)
+
+        self.assertIs(self.jogador.texture, self.jogador.textura_tita_idle)
 
     def test_titan_form_uses_directional_walk_and_jump_textures(self):
         self.jogador.center_x = 300
@@ -1754,6 +2184,7 @@ class TestDamageAnimation(unittest.TestCase):
         self.assertEqual(
             self.jogador.texture, self.jogador.texturas_transformacao[0]
         )
+        self.assertEqual(self.jogador.alpha, 255)
         self.assertAlmostEqual(self.jogador.bottom, base_anterior)
 
         self.jogador.update(
