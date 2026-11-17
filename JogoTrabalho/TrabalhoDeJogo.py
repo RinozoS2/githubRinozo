@@ -5,6 +5,7 @@ import random #posições e movimentos aleatórios
 import math
 import datetime
 import os
+import time
 from pathlib import Path
 import sys
 import unittest
@@ -67,6 +68,11 @@ def obter_ranking():
             Pontuacao.tempo_partida.asc(),
         ).limit(10)
     )
+
+
+def limpar_ranking():
+    inicializar_banco()
+    return Pontuacao.delete().execute()
 
 #Propriedades da janela
 # Configuração global da área de jogo; coordenadas e limites usam esses valores.
@@ -297,7 +303,7 @@ class Moeda(arcade.Sprite):
 # Moeda especial única: a tela de jogo configura sua velocidade e ela vale cinco pontos.
 class MoedaEspecial(arcade.Sprite):
     def __init__(self):
-        super().__init__("coin_sp2.png", scale = 0.35 * ESCALA)
+        super().__init__("coin_sp2.png", scale = 0.31 * ESCALA)
         self.change_x = 0
         self.change_y = 0
 
@@ -870,35 +876,84 @@ class TelaMenu(arcade.View):
 class TelaRanking(arcade.View):
     def __init__(self):
         super().__init__()
-        arcade.set_background_color(arcade.color.BLACK)
+        arcade.set_background_color((9, 32, 27))
         # Carrega os resultados persistidos uma vez e inicia a lista no começo.
         self.melhores = obter_ranking()
 
     def on_draw(self):
-        # Mostra até dez posições por página, formatando pontuação e duração.
         preparar_camera_interface(self.window)
         self.clear()
-        desenhar_texto("RANKING", LARGURA_BASE / 2, 530, arcade.color.WHITE,
-                         40, anchor_x="center")
-        desenhar_texto("POS.       PONTOS                 TEMPO", 180, 475,
-                         arcade.color.YELLOW, 20, anchor_x="left")
+
+        dourado = (255, 215, 0)
+        texto_claro = (240, 245, 239)
+        arcade.draw_lrbt_rectangle_filled(
+            escalar(96), escalar(704), escalar(502), escalar(506),
+            (139, 35, 29),
+        )
+        desenhar_texto(
+            "RANKING", LARGURA_BASE / 2, 525, dourado, 38,
+            anchor_x="center", bold=True,
+        )
+
+        esquerda, direita = escalar(100), escalar(700)
+        arcade.draw_lrbt_rectangle_filled(
+            esquerda, direita, escalar(448), escalar(480), (112, 31, 26)
+        )
+        for titulo, x, alinhamento in (
+            ("POS.", 128, "center"),
+            ("JOGADOR", 178, "left"),
+            ("PONTOS", 555, "center"),
+            ("TEMPO", 665, "center"),
+        ):
+            desenhar_texto(
+                titulo, x, 458, dourado, 14,
+                anchor_x=alinhamento, bold=True,
+            )
 
         if not self.melhores:
-            desenhar_texto("Nenhuma partida registrada.", LARGURA_BASE / 2, 400,
-                             arcade.color.WHITE, 20, anchor_x="center")
+            arcade.draw_lrbt_rectangle_filled(
+                esquerda, direita, escalar(275), escalar(365), (16, 48, 40)
+            )
+            desenhar_texto(
+                "Nenhuma partida registrada.", LARGURA_BASE / 2, 310,
+                texto_claro, 19, anchor_x="center",
+            )
         else:
             for posicao, resultado in enumerate(self.melhores, start=1):
-                y = 435 - (posicao - 1) * 35
+                topo = escalar(440 - (posicao - 1) * 34)
+                baixo = escalar(410 - (posicao - 1) * 34)
+                cor_faixa = (20, 57, 46) if posicao % 2 else (15, 47, 39)
+                arcade.draw_lrbt_rectangle_filled(
+                    esquerda, direita, baixo, topo, cor_faixa
+                )
+                cor_posicao = {
+                    1: dourado,
+                    2: (210, 220, 216),
+                    3: (205, 132, 79),
+                }.get(posicao, texto_claro)
                 desenhar_texto(
-                    f"{posicao:>3}. {resultado.nome_jogador:<20} "
-                    f"{resultado.pontos:>3} pontos   "
-                    f"{resultado.tempo_partida:.1f}s",
-                    180, y, arcade.color.WHITE, 18, anchor_x="left"
+                    f"{posicao:02}", 128, 415 - (posicao - 1) * 34,
+                    cor_posicao, 16, anchor_x="center", bold=True,
+                )
+                desenhar_texto(
+                    resultado.nome_jogador[:30], 178,
+                    415 - (posicao - 1) * 34,
+                    texto_claro, 16, anchor_x="left",
+                )
+                desenhar_texto(
+                    str(resultado.pontos), 555, 415 - (posicao - 1) * 34,
+                    dourado, 16, anchor_x="center",
+                )
+                desenhar_texto(
+                    f"{resultado.tempo_partida:.1f}s", 665,
+                    415 - (posicao - 1) * 34,
+                    texto_claro, 16, anchor_x="center",
                 )
 
-        desenhar_texto("ESC ou M voltar ao menu",
-                 LARGURA_BASE / 2, 70, arcade.color.WHITE, 16,
-                         anchor_x="center")
+        desenhar_texto(
+            "ESC ou M voltar ao menu", LARGURA_BASE / 2, 60,
+            texto_claro, 15, anchor_x="center",
+        )
 
     def on_key_press(self, key, modifiers):
         # O índice limita a rolagem à primeira posição válida de uma página.
@@ -922,58 +977,127 @@ class TelaInstrucao(arcade.View):
         self.cenario_sprite.center_y = ALTURA / 2
         self.sprite_cenario = arcade.SpriteList()
         self.sprite_cenario.append(self.cenario_sprite)
+        self.texturas_itens = {
+            1: arcade.load_texture(
+                str(Path(__file__).with_name("iten_1.png"))
+            ),
+            2: arcade.load_texture(
+                str(Path(__file__).with_name("iten_2.png"))
+            ),
+        }
 
     def on_draw(self):
         preparar_camera_interface(self.window)
         self.clear()
         self.sprite_cenario.draw()
         arcade.draw_lrbt_rectangle_filled(
-            escalar(35), escalar(765), escalar(90), escalar(540),
-            (0, 0, 0, 205),
+            escalar(32), escalar(768), escalar(48), escalar(565),
+            (5, 18, 19, 225),
         )
+        arcade.draw_lrbt_rectangle_filled(
+            escalar(32), escalar(768), escalar(560), escalar(565),
+            (139, 35, 29),
+        )
+        dourado = (255, 215, 0)
+        texto_claro = (242, 245, 239)
         desenhar_texto(
-            "COMO JOGAR", LARGURA_BASE / 2, 550,
-            arcade.color.YELLOW, 34, anchor_x="center", bold=True,
+            "GUIA DE SOBREVIVÊNCIA", LARGURA_BASE / 2, 530,
+            dourado, 31, anchor_x="center", bold=True,
+        )
+        arcade.draw_lrbt_rectangle_filled(
+            escalar(65), escalar(735), escalar(510), escalar(512),
+            (139, 35, 29),
         )
 
         secoes = (
             (
                 "OBJETIVO",
-                ("Complete as 3 fases.", "Em cada fase, colete:", "25 titãs comuns + 1 filtro de gás.",
-                 "Titã comum: +1 ponto | Filtro: +5."),
-                75, 455,
+                ("Complete as 3 fases.", "Colete 25 moedas e 1 filtro por fase.",
+                 "Moeda: +1 ponto | Filtro: +5 pontos."),
+                75, 480,
             ),
             (
                 "CONTROLES",
-                ("A / D  -  mover para os lados", "W ou ESPAÇO  -  pular",
-                 "ESC ou M  -  voltar ao menu"),
-                420, 455,
+                ("A / D mover | W ou ESPAÇO pular",
+                 "ESC ou M voltar ao menu."),
+                420, 480,
             ),
             (
-                "CUIDADO COM OS INIMIGOS",
-                ("Titã Irracional: tira 1 ponto ao tocar.", "Titã Puro: se alcançar você, a partida acaba."),
-                75, 280,
+                "PERIGOS",
+                ("Titã Irracional: perde 1 ponto ao tocar.",
+                 "Titã Puro: se alcançar você, a partida termina."),
+                75, 365,
             ),
             (
                 "MODO TITÃ",
-                ("Colete 4 raios para se transformar.", "Fique invencível por 7,5 segundos."),
-                420, 280,
+                ("Colete 4 raios para se transformar.",
+                 "Fique invencível por 7,5 segundos."),
+                420, 365,
             ),
         )
         for titulo, linhas, x, y in secoes:
             desenhar_texto(
-                titulo, x, y, arcade.color.YELLOW, 19,
+                titulo, x, y, dourado, 18,
                 anchor_x="left", bold=True,
             )
             for indice, linha in enumerate(linhas, start=1):
                 desenhar_texto(
-                    linha, x, y - indice * 32, arcade.color.WHITE, 15,
+                    linha, x, y - indice * 27, texto_claro, 14,
                     anchor_x="left",
                 )
 
         desenhar_texto(
-            "ESC ou M para voltar ao menu", LARGURA_BASE / 2, 110,
-            arcade.color.WHITE, 15, anchor_x="center",
+            "ITENS ESPECIAIS", LARGURA_BASE / 2, 285,
+            dourado, 18, anchor_x="center", bold=True,
+        )
+
+        itens = (
+            (1, 52, "THE WORLD", "Paralisa os inimigos por 3 segundos."),
+            (2, 405, "THE HAND", "Coleta até 5 moedas próximas."),
+        )
+        for item, x, nome, descricao in itens:
+            arcade.draw_lrbt_rectangle_filled(
+                escalar(x), escalar(x + 343), escalar(145), escalar(252),
+                (14, 49, 42, 235),
+            )
+            arcade.draw_lrbt_rectangle_filled(
+                escalar(x), escalar(x + 343), escalar(248), escalar(252),
+                (139, 35, 29),
+            )
+            textura = self.texturas_itens[item]
+            area_icone = escalar(55)
+            escala_icone = min(
+                area_icone / textura.width, area_icone / textura.height
+            )
+            largura_icone = textura.width * escala_icone
+            altura_icone = textura.height * escala_icone
+            centro_icone_x = escalar(x + 45)
+            centro_icone_y = escalar(198)
+            arcade.draw_texture_rect(
+                textura,
+                arcade.LBWH(
+                    centro_icone_x - largura_icone / 2,
+                    centro_icone_y - altura_icone / 2,
+                    largura_icone,
+                    altura_icone,
+                ),
+            )
+            desenhar_texto(
+                nome, x + 85, 211, dourado, 15,
+                anchor_x="left", bold=True,
+            )
+            desenhar_texto(
+                descricao, x + 85, 180, texto_claro, 13,
+                anchor_x="left",
+            )
+
+        desenhar_texto(
+            "O filtro dá um item aleatório. Itens repetidos acumulam.",
+            LARGURA_BASE / 2, 112, texto_claro, 13, anchor_x="center",
+        )
+        desenhar_texto(
+            "ESC ou M voltar ao menu", LARGURA_BASE / 2, 72,
+            texto_claro, 14, anchor_x="center",
         )
         
     def on_key_press(self, key,modyfiers):
@@ -1060,16 +1184,74 @@ class TelaFim(arcade.View):
             return True
         return False
 
-    def desenhar_campo_nome(self):
-        if self.resultado_salvo:
-            texto = "Resultado salvo. R - ranking"
-        else:
-            texto = (
-                f"Nome: {self.nome_jogador or '_'}  |  "
-                "ENTER - salvar e voltar ao menu"
+    def desenhar_painel_resultado(self, cor_acento, cor_painel):
+        arcade.draw_lrbt_rectangle_filled(
+            escalar(105), escalar(695), escalar(75), escalar(525),
+            cor_painel,
+        )
+        arcade.draw_lrbt_rectangle_filled(
+            escalar(105), escalar(695), escalar(520), escalar(525),
+            cor_acento,
+        )
+        arcade.draw_lrbt_rectangle_filled(
+            escalar(105), escalar(111), escalar(75), escalar(525),
+            cor_acento,
+        )
+        for esquerda, direita in ((170, 390), (410, 630)):
+            arcade.draw_lrbt_rectangle_filled(
+                escalar(esquerda), escalar(direita), escalar(215),
+                escalar(320), (8, 18, 19, 170),
             )
-        desenhar_texto(texto, LARGURA_BASE / 2, 115, arcade.color.WHITE,
-                         18, anchor_x="center")
+
+    def desenhar_estatisticas(self, cor_acento):
+        desenhar_texto(
+            "PONTUAÇÃO", 280, 292, cor_acento, 14,
+            anchor_x="center", bold=True,
+        )
+        desenhar_texto(
+            str(self.pontuacao), 280, 245, arcade.color.WHITE, 34,
+            anchor_x="center", bold=True,
+        )
+        desenhar_texto(
+            "TEMPO", 520, 292, cor_acento, 14,
+            anchor_x="center", bold=True,
+        )
+        desenhar_texto(
+            f"{self.tempo:.1f}s", 520, 245, arcade.color.WHITE, 34,
+            anchor_x="center", bold=True,
+        )
+
+    def desenhar_campo_nome(self, cor_acento):
+        arcade.draw_lrbt_rectangle_filled(
+            escalar(170), escalar(630), escalar(105), escalar(185),
+            (8, 18, 19, 190),
+        )
+        arcade.draw_lrbt_rectangle_filled(
+            escalar(170), escalar(630), escalar(181), escalar(185),
+            cor_acento,
+        )
+        if self.resultado_salvo:
+            desenhar_texto(
+                "RESULTADO SALVO", LARGURA_BASE / 2, 151,
+                cor_acento, 14, anchor_x="center", bold=True,
+            )
+            desenhar_texto(
+                "R abre o ranking", LARGURA_BASE / 2, 119,
+                arcade.color.WHITE, 15, anchor_x="center",
+            )
+        else:
+            desenhar_texto(
+                "NOME DO JOGADOR", LARGURA_BASE / 2, 151,
+                cor_acento, 12, anchor_x="center", bold=True,
+            )
+            desenhar_texto(
+                self.nome_jogador or "_", LARGURA_BASE / 2, 121,
+                arcade.color.WHITE, 16, anchor_x="center",
+            )
+            desenhar_texto(
+                "ENTER salva e volta ao menu", LARGURA_BASE / 2, 83,
+                arcade.color.WHITE, 13, anchor_x="center",
+            )
 
     def on_key_press(self, key, modifiers):
         if key == arcade.key.BACKSPACE and not self.resultado_salvo:
@@ -1090,19 +1272,28 @@ class TelaGanhou(TelaFim):
         arcade.set_background_color(arcade.color.FOREST_GREEN)
 
     def on_draw(self):
-        # Apresenta o resultado final e uma mensagem adicional para a pontuação especial.
         preparar_camera_interface(self.window)
         self.clear()
-        desenhar_texto("PARABÉNS", LARGURA_BASE / 2, 470,
-                         arcade.color.WHITE, 50, anchor_x="center")
+        dourado = (255, 215, 0)
+        self.desenhar_painel_resultado(dourado, (8, 48, 34, 235))
+        desenhar_texto(
+            "JORNADA CONCLUÍDA", LARGURA_BASE / 2, 470,
+            dourado, 17, anchor_x="center", bold=True,
+        )
+        desenhar_texto(
+            "PARABÉNS", LARGURA_BASE / 2, 410,
+            arcade.color.WHITE, 44, anchor_x="center", bold=True,
+        )
         if self.pontuacao == 30:
-            desenhar_texto("INACREDITÁVEL", LARGURA_BASE / 2, 380,
-                             arcade.color.WHITE, 50, anchor_x="center")
-        desenhar_texto(f"PONTUAÇÃO {self.pontuacao}", LARGURA_BASE / 2, 300,
-                         arcade.color.WHITE, 40, anchor_x="center")
-        desenhar_texto(f"TEMPO {self.tempo:.1f}s", LARGURA_BASE / 2, 240,
-                         arcade.color.WHITE, 24, anchor_x="center")
-        self.desenhar_campo_nome()
+            detalhe = "INACREDITÁVEL"
+        else:
+            detalhe = "VOCÊ COMPLETOU AS TRÊS FASES"
+        desenhar_texto(
+            detalhe, LARGURA_BASE / 2, 365,
+            arcade.color.WHITE, 16, anchor_x="center",
+        )
+        self.desenhar_estatisticas(dourado)
+        self.desenhar_campo_nome(dourado)
 
 
 #Tela de derrota, é disparada através do evento no titã puro, que persegue o jogador
@@ -1113,36 +1304,45 @@ class TelaPerdeu(TelaFim):
         arcade.set_background_color(arcade.color.DARK_RED)
 
     def on_draw(self):
-        # Informa o motivo da derrota junto com os dados acumulados até então.
         preparar_camera_interface(self.window)
         self.clear()
+        acento = (255, 112, 112)
+        self.desenhar_painel_resultado(acento, (47, 13, 19, 238))
         desenhar_texto(
-            "VOCÊ PERDEU",
-            LARGURA_BASE / 2,
-            ALTURA_LAYOUT_BASE / 2 + 40,
-                         arcade.color.WHITE, 50, anchor_x="center")
+            "FIM DE JOGO", LARGURA_BASE / 2, 470,
+            acento, 17, anchor_x="center", bold=True,
+        )
         desenhar_texto(
-            "O Titã Puro te alcançou.",
-            LARGURA_BASE / 2,
-            ALTURA_LAYOUT_BASE / 2,
-                         arcade.color.WHITE, 24, anchor_x="center")
+            "VOCÊ PERDEU", LARGURA_BASE / 2, 410,
+            arcade.color.WHITE, 42, anchor_x="center", bold=True,
+        )
         desenhar_texto(
-            f"Pontuação: {self.pontuacao}   Tempo: {self.tempo:.1f}s",
-            LARGURA_BASE / 2,
-            ALTURA_LAYOUT_BASE / 2 - 35,
-                 arcade.color.WHITE, 20, anchor_x="center")
-        self.desenhar_campo_nome()
+            "O Titã Puro te alcançou.", LARGURA_BASE / 2, 365,
+            arcade.color.WHITE, 16, anchor_x="center",
+        )
+        self.desenhar_estatisticas(acento)
+        self.desenhar_campo_nome(acento)
 
 #Janela Final com as váriaveis necessárias
 # View principal da partida: concentra o estado do jogo e coordena seus sprites.
 class JogoAtaqueDoTita(arcade.View):
     duracao_paralisia_item = 3.0
     duracao_efeito_azul_item = 1.6
+    duracao_aparicao_filtro = 2.0
 
     def __init__(self):
         super().__init__()
         arcade.set_background_color(arcade.color.AMAZON)
         self.camera = arcade.Camera2D()
+        self.particulas_ambiente = [
+            [
+                random.uniform(0, LARGURA),
+                random.uniform(0, ALTURA),
+                random.uniform(1.2, 2.8),
+                random.uniform(10, 26),
+            ]
+            for _ in range(28)
+        ]
         
         # Estado mutável da sessão: resultado, cronômetro, mensagens e parâmetros.
         self.pontuacao = 0
@@ -1156,6 +1356,9 @@ class JogoAtaqueDoTita(arcade.View):
         self.tempo_tremor_inicio = 0
         self.mensagem = ""
         self.tempo_mensagem = 0
+        self.tempo_ultima_tecla_g = None
+        self.tecla_g_pressionada = False
+        self.intervalo_duplo_g = 0.6
         self.velocidade_ini = 2 * ESCALA
         self.jogo_rodando = True
         self.is_invencivel = False
@@ -1173,6 +1376,14 @@ class JogoAtaqueDoTita(arcade.View):
         self.intervalo_raio = 3.0
         self.tempo_proximo_raio = 1.5
         self.duracao_modo_tita = 7.5
+        self.tempo_efeito_coleta_raio = 0
+        self.duracao_efeito_coleta_raio = 0.45
+        self.filtro_pendente = False
+        self.tempo_aparicao_filtro = 0
+        self.animacoes_coleta_item = []
+        self.tempo_pop_coleta_item = 0
+        self.duracao_animacao_coleta_item = 0.55
+        self.duracao_pop_coleta_item = 0.24
         # O tempo restante controla simultaneamente o tremor e o filtro vermelho.
         self.tempo_efeito_colisao = 0
         self.duracao_efeito_colisao = 0.4
@@ -1494,6 +1705,89 @@ class JogoAtaqueDoTita(arcade.View):
                 arcade.color.YELLOW, 12, anchor_x="right",
             )
 
+    def iniciar_animacao_coleta_item(self, coletavel):
+        self.animacoes_coleta_item.append(
+            {
+                "x": coletavel.center_x,
+                "y": coletavel.center_y,
+                "textura": coletavel.texture,
+                "largura": coletavel.width,
+                "altura": coletavel.height,
+                "decorrido": 0,
+            }
+        )
+
+    def atualizar_animacoes_coleta_item(self, delta_time):
+        self.tempo_pop_coleta_item = max(
+            0, self.tempo_pop_coleta_item - delta_time
+        )
+        for animacao in self.animacoes_coleta_item[:]:
+            animacao["decorrido"] += delta_time
+            if animacao["decorrido"] >= self.duracao_animacao_coleta_item:
+                self.animacoes_coleta_item.remove(animacao)
+                self.tempo_pop_coleta_item = self.duracao_pop_coleta_item
+
+    def desenhar_animacoes_coleta_item(self):
+        x_slot = LARGURA - escalar(18 + 58 / 2)
+        y_slot = ALTURA - escalar(88 + 58 / 2)
+        for animacao in self.animacoes_coleta_item:
+            progresso = min(
+                1, animacao["decorrido"] / self.duracao_animacao_coleta_item
+            )
+            suavizado = progresso * progresso * (3 - 2 * progresso)
+            x = animacao["x"] + (x_slot - animacao["x"]) * suavizado
+            y = (
+                animacao["y"]
+                + (y_slot - animacao["y"]) * suavizado
+                + math.sin(progresso * math.pi) * escalar(34)
+            )
+            transicao_esfera = min(1, progresso / 0.38)
+            largura = animacao["largura"] + (
+                escalar(12) - animacao["largura"]
+            ) * transicao_esfera
+            altura = animacao["altura"] + (
+                escalar(12) - animacao["altura"]
+            ) * transicao_esfera
+            if progresso < 0.38:
+                arcade.draw_texture_rect(
+                    animacao["textura"],
+                    arcade.LBWH(
+                        x - largura / 2,
+                        y - altura / 2,
+                        largura,
+                        altura,
+                    ),
+                )
+            else:
+                raio = escalar(7) * (1 - 0.18 * progresso)
+                arcade.draw_circle_filled(
+                    x, y, raio * 1.8, (255, 219, 86, 90)
+                )
+                arcade.draw_circle_filled(
+                    x, y, raio, (255, 239, 157, 245)
+                )
+
+        if self.tempo_pop_coleta_item > 0:
+            progresso = 1 - (
+                self.tempo_pop_coleta_item / self.duracao_pop_coleta_item
+            )
+            raio = escalar(5 + 15 * progresso)
+            opacidade = int(230 * (1 - progresso))
+            arcade.draw_circle_outline(
+                x_slot, y_slot, raio, (255, 225, 105, opacidade), escalar(2)
+            )
+            for indice in range(6):
+                angulo = math.tau * indice / 6
+                x_br = x_slot + math.cos(angulo) * raio
+                y_br = y_slot + math.sin(angulo) * raio
+                arcade.draw_circle_filled(
+                    x_br, y_br, escalar(2), (255, 242, 174, opacidade)
+                )
+            desenhar_texto(
+                "PAPIM!", x_slot / ESCALA, y_slot / ESCALA + 17,
+                arcade.color.YELLOW, 13, anchor_x="center", bold=True,
+            )
+
     def definir_dificuldade(self):
         multiplicador = self.multiplicadores_inimigos[self.fase_atual - 1]
         arcade.set_background_color(
@@ -1512,6 +1806,8 @@ class JogoAtaqueDoTita(arcade.View):
     def criar_coletaveis(self):
         self.sprite_moedas.clear()
         self.sprite_moeda_especial.clear()
+        self.filtro_pendente = True
+        self.tempo_aparicao_filtro = self.duracao_aparicao_filtro
 
         for _ in range(25):
             moeda = Moeda()
@@ -1528,6 +1824,7 @@ class JogoAtaqueDoTita(arcade.View):
                     break
             self.sprite_moedas.append(moeda)
 
+    def criar_moeda_especial(self):
         moeda_especial = MoedaEspecial()
         while True:
             moeda_especial.center_x = escalar(
@@ -1548,6 +1845,18 @@ class JogoAtaqueDoTita(arcade.View):
         moeda_especial.change_x = self.velocidade
         moeda_especial.change_y = self.velocidade
         self.sprite_moeda_especial.append(moeda_especial)
+
+    def atualizar_aparicao_filtro(self, delta_time):
+        if not self.filtro_pendente:
+            return
+
+        self.tempo_aparicao_filtro = max(
+            0, self.tempo_aparicao_filtro - delta_time
+        )
+        if self.tempo_aparicao_filtro <= 1e-6:
+            self.tempo_aparicao_filtro = 0
+            self.criar_moeda_especial()
+            self.filtro_pendente = False
 
     def avancar_fase(self):
         self.fase_atual += 1
@@ -1582,6 +1891,9 @@ class JogoAtaqueDoTita(arcade.View):
         self.tempo_proximo_raio = self.intervalo_raio
 
     def atualizar_raios(self, delta_time):
+        self.tempo_efeito_coleta_raio = max(
+            0, self.tempo_efeito_coleta_raio - delta_time
+        )
         if not self.is_invencivel:
             self.tempo_proximo_raio -= delta_time
             if self.tempo_proximo_raio <= 0:
@@ -1599,6 +1911,7 @@ class JogoAtaqueDoTita(arcade.View):
         for raio in raios_coletados:
             raio.remove_from_sprite_lists()
             self.raios_coletados = min(4, self.raios_coletados + 1)
+            self.tempo_efeito_coleta_raio = self.duracao_efeito_coleta_raio
             self.barra_tita.texture = self.texturas_barra_tita[
                 self.raios_coletados
             ]
@@ -1630,12 +1943,29 @@ class JogoAtaqueDoTita(arcade.View):
             ALTURA / 2 + random.uniform(-intensidade_tremor, intensidade_tremor),
         )
         self.camera.use()
+        for x, y, raio, _ in self.particulas_ambiente:
+            brilho = int(55 + 30 * (0.5 + 0.5 * math.sin(y * 0.025)))
+            arcade.draw_circle_filled(
+                x, y, raio, (238, 210, 135, brilho)
+            )
         if self.jogo_iniciado:
             self.sprite_titas_irracionais.draw()
         self.sprite_raios.draw()
         self.sprite_moedas.draw()
         self.sprite_moeda_especial.draw()
         self.sprite_blocos.draw()
+        if self.tempo_efeito_coleta_raio > 0:
+            progresso = (
+                self.tempo_efeito_coleta_raio
+                / self.duracao_efeito_coleta_raio
+            )
+            raio_halo = max(self.jogador.width, self.jogador.height) * 0.7
+            arcade.draw_circle_filled(
+                self.jogador.center_x,
+                self.jogador.center_y,
+                raio_halo,
+                (255, 224, 85, int(95 * progresso)),
+            )
         self.sprite_jogador.draw()
         if self.jogo_iniciado:
             self.sprite_titas_puros.draw()
@@ -1665,6 +1995,7 @@ class JogoAtaqueDoTita(arcade.View):
             objeto_texto.draw()
         self.sprite_barra_tita.draw()
         self.desenhar_hud_item()
+        self.desenhar_animacoes_coleta_item()
         if self.tempo_mensagem > 0:
             desenhar_texto(self.mensagem, LARGURA_BASE / 2, 470,
                            arcade.color.WHITE, 20, anchor_x="center")
@@ -1703,11 +2034,21 @@ class JogoAtaqueDoTita(arcade.View):
                     arcade.color.WHITE, 25, anchor_x="center"
                 )
 
+    def atualizar_particulas_ambiente(self, delta_time):
+        for particula in self.particulas_ambiente:
+            particula[1] += particula[3] * delta_time
+            particula[0] += math.sin(particula[1] * 0.012) * delta_time * 7
+            if particula[1] > ALTURA + 4:
+                particula[0] = random.uniform(0, LARGURA)
+                particula[1] = -4
+
 
 
         
 
     def on_update(self, delta_time):
+        self.atualizar_particulas_ambiente(delta_time)
+        self.atualizar_animacoes_coleta_item(delta_time)
         if not self.jogo_iniciado:
             self.tempo_preparacao = max(
                 0, self.tempo_preparacao - delta_time
@@ -1734,6 +2075,8 @@ class JogoAtaqueDoTita(arcade.View):
             if self.tempo_cooldown_fase == 0:
                 self.avancar_fase()
             return
+
+        self.atualizar_aparicao_filtro(delta_time)
 
         if self.is_invencivel and self.temporizador_tita_iniciado:
             self.tempo_invencibilidade = max(
@@ -1830,6 +2173,7 @@ class JogoAtaqueDoTita(arcade.View):
 
         for moeda_especial in moeda_especial_colidida:
             # A moeda especial concede cinco pontos antes de ser removida.
+            self.iniciar_animacao_coleta_item(moeda_especial)
             moeda_especial.remove_from_sprite_lists()
             # O registro conta itens coletados, não pontos concedidos.
             self.pontuacao += 5
@@ -1843,6 +2187,9 @@ class JogoAtaqueDoTita(arcade.View):
         if (
             not self.sprite_moeda_especial
             and not self.sprite_moedas
+            and not self.filtro_pendente
+            and not self.animacoes_coleta_item
+            and self.tempo_pop_coleta_item <= 0
             and not self.aguardando_proxima_fase
         ):
             if self.fase_atual < self.total_fases:
@@ -1864,6 +2211,24 @@ class JogoAtaqueDoTita(arcade.View):
             return
         if key == arcade.key.O:
             self.alternar_item_admin()
+            return
+        if key == arcade.key.G:
+            if self.tecla_g_pressionada:
+                return
+            self.tecla_g_pressionada = True
+            agora = time.monotonic()
+            if (
+                self.tempo_ultima_tecla_g is not None
+                and agora - self.tempo_ultima_tecla_g <= self.intervalo_duplo_g
+            ):
+                quantidade = limpar_ranking()
+                self.mensagem = f"RANKING LIMPO: {quantidade} RESULTADOS"
+                self.tempo_mensagem = 2.5
+                self.tempo_ultima_tecla_g = None
+            else:
+                self.tempo_ultima_tecla_g = agora
+                self.mensagem = "PRESSIONE G NOVAMENTE PARA LIMPAR O RANKING"
+                self.tempo_mensagem = 1.5
             return
         if key == arcade.key.P and not self.is_invencivel:
             self.raios_coletados = 4
@@ -1901,6 +2266,8 @@ class JogoAtaqueDoTita(arcade.View):
                 self.jogador.iniciar_animacao_pulo()
 
     def on_key_release(self, key, modifiers):
+        if key == arcade.key.G:
+            self.tecla_g_pressionada = False
         # Ao soltar A ou D, zera a velocidade para interromper o movimento lateral.
         if key == arcade.key.A or key == arcade.key.D:
             self.jogador.change_x = 0
@@ -2044,6 +2411,38 @@ class TestDamageAnimation(unittest.TestCase):
         jogo.on_key_press(arcade.key.O, 0)
         self.assertEqual(jogo.inventario_itens, [2, 2])
 
+    def test_admin_gg_clears_ranking_only_after_two_distinct_presses(self):
+        jogo = JogoAtaqueDoTita.__new__(JogoAtaqueDoTita)
+        jogo.jogo_iniciado = True
+        jogo.tempo_ultima_tecla_g = None
+        jogo.tecla_g_pressionada = False
+        jogo.intervalo_duplo_g = 0.6
+        jogo.mensagem = ""
+        jogo.tempo_mensagem = 0
+
+        with patch.object(
+            sys.modules[__name__], "limpar_ranking", return_value=3
+        ) as limpar, patch.object(time, "monotonic", side_effect=(10, 10.3)):
+            jogo.on_key_press(arcade.key.G, 0)
+            limpar.assert_not_called()
+            self.assertIn("PRESSIONE G", jogo.mensagem)
+
+            jogo.on_key_release(arcade.key.G, 0)
+            jogo.on_key_press(arcade.key.G, 0)
+
+        limpar.assert_called_once_with()
+        self.assertEqual(jogo.mensagem, "RANKING LIMPO: 3 RESULTADOS")
+
+    def test_ambient_particles_float_and_wrap_to_bottom(self):
+        jogo = JogoAtaqueDoTita.__new__(JogoAtaqueDoTita)
+        jogo.particulas_ambiente = [[20, ALTURA + 2, 2, 10]]
+
+        with patch.object(random, "uniform", return_value=45):
+            jogo.atualizar_particulas_ambiente(0.5)
+
+        self.assertEqual(jogo.particulas_ambiente[0][0], 45)
+        self.assertEqual(jogo.particulas_ambiente[0][1], -4)
+
     def test_hard_difficulty_changes_background_to_red(self):
         jogo = JogoAtaqueDoTita.__new__(JogoAtaqueDoTita)
         jogo.multiplicadores_inimigos = (0.65, 1.0, 1.4)
@@ -2118,6 +2517,9 @@ class TestDamageAnimation(unittest.TestCase):
     def test_game_timer_pauses_during_phase_transition(self):
         jogo = JogoAtaqueDoTita.__new__(JogoAtaqueDoTita)
         jogo.jogo_iniciado = True
+        jogo.particulas_ambiente = []
+        jogo.animacoes_coleta_item = []
+        jogo.tempo_pop_coleta_item = 0
         jogo.aguardando_proxima_fase = True
         jogo.tempo_cooldown_fase = 3
         jogo.tempo = 42
@@ -2326,6 +2728,105 @@ class TestDamageAnimation(unittest.TestCase):
 
         self.assertAlmostEqual(primeira_altura - altura_inicial, velocidade)
         self.assertAlmostEqual(raio.center_y - primeira_altura, velocidade)
+
+    def test_lightning_pickup_triggers_short_character_glow(self):
+        class RaioTeste:
+            removido = False
+
+            def remove_from_sprite_lists(self):
+                self.removido = True
+
+        class ListaRaiosTeste:
+            def update(self, delta_time):
+                pass
+
+        class BarraTeste:
+            texture = None
+
+        jogo = JogoAtaqueDoTita.__new__(JogoAtaqueDoTita)
+        raio = RaioTeste()
+        jogo.tempo_efeito_coleta_raio = 0
+        jogo.duracao_efeito_coleta_raio = 0.45
+        jogo.is_invencivel = True
+        jogo.sprite_raios = ListaRaiosTeste()
+        jogo.jogador = object()
+        jogo.raios_coletados = 0
+        jogo.barra_tita = BarraTeste()
+        jogo.texturas_barra_tita = [object() for _ in range(5)]
+
+        with patch.object(
+            arcade,
+            "check_for_collision_with_list",
+            side_effect=([raio], []),
+        ):
+            jogo.atualizar_raios(0.1)
+            self.assertEqual(jogo.tempo_efeito_coleta_raio, 0.45)
+            jogo.atualizar_raios(0.2)
+
+        self.assertTrue(raio.removido)
+        self.assertEqual(jogo.tempo_efeito_coleta_raio, 0.25)
+
+    def test_special_collectible_uses_slightly_smaller_scale(self):
+        coletavel = MoedaEspecial()
+
+        escala_x, escala_y = coletavel.scale
+        self.assertAlmostEqual(escala_x, 0.31 * ESCALA)
+        self.assertAlmostEqual(escala_y, 0.31 * ESCALA)
+
+    def test_special_collectible_animation_ends_with_slot_pop(self):
+        jogo = JogoAtaqueDoTita.__new__(JogoAtaqueDoTita)
+        jogo.animacoes_coleta_item = []
+        jogo.tempo_pop_coleta_item = 0
+        jogo.duracao_animacao_coleta_item = 0.55
+        jogo.duracao_pop_coleta_item = 0.24
+        coletavel = MoedaEspecial()
+        coletavel.center_x = 200
+        coletavel.center_y = 300
+
+        jogo.iniciar_animacao_coleta_item(coletavel)
+        jogo.atualizar_animacoes_coleta_item(0.3)
+        self.assertEqual(len(jogo.animacoes_coleta_item), 1)
+        self.assertEqual(jogo.tempo_pop_coleta_item, 0)
+
+        jogo.atualizar_animacoes_coleta_item(0.3)
+        self.assertEqual(jogo.animacoes_coleta_item, [])
+        self.assertEqual(jogo.tempo_pop_coleta_item, 0.24)
+
+        jogo.atualizar_animacoes_coleta_item(0.1)
+        self.assertAlmostEqual(jogo.tempo_pop_coleta_item, 0.14)
+
+    def test_gas_filter_appears_after_two_seconds(self):
+        jogo = JogoAtaqueDoTita.__new__(JogoAtaqueDoTita)
+        jogo.filtro_pendente = True
+        jogo.tempo_aparicao_filtro = 2.0
+
+        with patch.object(jogo, "criar_moeda_especial") as criar_filtro:
+            jogo.atualizar_aparicao_filtro(1.9)
+            criar_filtro.assert_not_called()
+            self.assertTrue(jogo.filtro_pendente)
+            self.assertAlmostEqual(jogo.tempo_aparicao_filtro, 0.1)
+
+            jogo.atualizar_aparicao_filtro(0.1)
+
+        criar_filtro.assert_called_once_with()
+        self.assertFalse(jogo.filtro_pendente)
+        self.assertEqual(jogo.tempo_aparicao_filtro, 0)
+
+    def test_game_update_calls_gas_filter_spawn_timer(self):
+        jogo = JogoAtaqueDoTita.__new__(JogoAtaqueDoTita)
+        jogo.particulas_ambiente = []
+        jogo.animacoes_coleta_item = []
+        jogo.tempo_pop_coleta_item = 0
+        jogo.jogo_iniciado = True
+        jogo.aguardando_proxima_fase = False
+
+        with patch.object(jogo, "atualizar_efeitos_itens"), patch.object(
+            jogo,
+            "atualizar_aparicao_filtro",
+            side_effect=RuntimeError("spawn timer reached"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "spawn timer reached"):
+                jogo.on_update(0.1)
 
     def test_transformation_bar_has_five_progress_states(self):
         self.assertEqual(len(carregar_estados_barra()), 5)
