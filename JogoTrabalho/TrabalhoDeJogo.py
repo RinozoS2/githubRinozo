@@ -1293,6 +1293,15 @@ class JogoAtaqueDoTita(arcade.View):
         self.inventario_itens.append(item)
         return item
 
+    def alternar_item_admin(self):
+        if not self.inventario_itens:
+            self.inventario_itens.append(1)
+            return
+
+        self.inventario_itens = [
+            2 if item == 1 else 1 for item in self.inventario_itens
+        ]
+
     def coletar_moedas_automaticamente(self, quantidade=5):
         moedas_coletadas = list(self.sprite_moedas)[:quantidade]
         for moeda in moedas_coletadas:
@@ -1487,6 +1496,11 @@ class JogoAtaqueDoTita(arcade.View):
 
     def definir_dificuldade(self):
         multiplicador = self.multiplicadores_inimigos[self.fase_atual - 1]
+        arcade.set_background_color(
+            arcade.color.DARK_RED
+            if self.fase_atual == self.total_fases
+            else arcade.color.AMAZON
+        )
         self.tita_puro.velocidade = 2.0 * ESCALA * multiplicador
         self.tita_irracional.multiplicador_velocidade = multiplicador
         velocidade_base = self.velocidade_ini * multiplicador
@@ -1848,6 +1862,9 @@ class JogoAtaqueDoTita(arcade.View):
         if key == arcade.key.Z:
             self.usar_item()
             return
+        if key == arcade.key.O:
+            self.alternar_item_admin()
+            return
         if key == arcade.key.P and not self.is_invencivel:
             self.raios_coletados = 4
             self.barra_tita.texture = self.texturas_barra_tita[4]
@@ -2011,6 +2028,43 @@ class TestDamageAnimation(unittest.TestCase):
         self.assertEqual(jogo.registro, 5)
         self.assertEqual(jogo.efeito_visual_item, "azul")
         self.assertEqual(jogo.tempo_efeito_visual_item, 1.6)
+
+    def test_admin_o_cycles_item_type_without_changing_quantity(self):
+        jogo = JogoAtaqueDoTita.__new__(JogoAtaqueDoTita)
+        jogo.jogo_iniciado = True
+        jogo.inventario_itens = []
+
+        jogo.on_key_press(arcade.key.O, 0)
+        self.assertEqual(jogo.inventario_itens, [1])
+
+        jogo.on_key_press(arcade.key.O, 0)
+        self.assertEqual(jogo.inventario_itens, [2])
+
+        jogo.inventario_itens = [1, 1]
+        jogo.on_key_press(arcade.key.O, 0)
+        self.assertEqual(jogo.inventario_itens, [2, 2])
+
+    def test_hard_difficulty_changes_background_to_red(self):
+        jogo = JogoAtaqueDoTita.__new__(JogoAtaqueDoTita)
+        jogo.multiplicadores_inimigos = (0.65, 1.0, 1.4)
+        jogo.total_fases = 3
+        jogo.fase_atual = 3
+        jogo.tita_puro = type("Tita", (), {})()
+        jogo.tita_irracional = type("Irracional", (), {})()
+        jogo.tita_irracional.change_x = 1
+        jogo.tita_irracional.change_y = 1
+        jogo.velocidade_ini = 2
+
+        with patch.object(arcade, "set_background_color") as definir_fundo:
+            jogo.definir_dificuldade()
+
+        definir_fundo.assert_called_once_with(arcade.color.DARK_RED)
+
+        jogo.fase_atual = 2
+        with patch.object(arcade, "set_background_color") as definir_fundo:
+            jogo.definir_dificuldade()
+
+        definir_fundo.assert_called_once_with(arcade.color.AMAZON)
 
     def test_ground_blocks_cover_screen_without_gaps(self):
         bloco = Bloco(0, 0)
